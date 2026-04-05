@@ -1,0 +1,82 @@
+<ion-content [fullscreen]="true" class="register-create-family-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+      <ion-icon name="notifications-outline" class="notification-icon" (click)="navigateToNotifications()"></ion-icon>
+    </div>
+
+    <div class="title-section">
+      <h1>Find a Family</h1>
+    </div>
+
+    <div class="pending-requests-section" *ngIf="pendingRequests.length > 0">
+      <h3>Pending Join Requests</h3>
+      <div class="pending-request-card" *ngFor="let request of pendingRequests">
+        <div class="request-info">
+          <h4>{{ request.familyName }}</h4>
+          <p>Request sent to family owner</p>
+          <p class="request-status">Status: {{ request.status | titlecase }}</p>
+        </div>
+        <ion-button
+          fill="outline"
+          color="danger"
+          size="small"
+          (click)="cancelJoinRequest(request)">
+          Cancel
+        </ion-button>
+      </div>
+    </div>
+
+    <div class="search-section">
+      <ion-searchbar
+        placeholder="Search for families..."
+        [(ngModel)]="searchTerm"
+        (ionInput)="onSearchInput($event)"
+        class="custom-searchbar"
+        [disabled]="isLoading || hasPendingRequest">
+      </ion-searchbar>
+      <div class="search-disabled-message" *ngIf="hasPendingRequest">
+        <p>Cancel your pending request to search for other families</p>
+      </div>
+    </div>
+
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading families...</p>
+    </div>
+
+    <div class="content-area" *ngIf="!isLoading">
+      <!-- Show search results when searching -->
+      <div *ngIf="searchTerm && searchResults.length > 0 && !hasPendingRequest" class="search-results">
+        <ion-list>
+          <ion-item *ngFor="let family of searchResults" button (click)="selectFamily(family)" class="family-item">
+            <ion-avatar slot="start">
+              <img [src]="family.photo || 'assets/default-family.png'" [alt]="family.name">
+            </ion-avatar>
+            <ion-label>
+              <h2>{{ family.name }}</h2>
+              <p class="family-date">Created: {{ formatDate(family.dateCreated) }}</p>
+            </ion-label>
+            <ion-icon name="chevron-forward" slot="end"></ion-icon>
+          </ion-item>
+        </ion-list>
+      </div>
+
+      <!-- Show no results message -->
+      <div *ngIf="searchTerm && searchResults.length === 0 && !hasPendingRequest && !isLoading" class="no-results">
+        <ion-icon name="search-outline" class="no-results-icon"></ion-icon>
+        <p>No families found matching "{{ searchTerm }}"</p>
+      </div>
+
+      <!-- Show prompt to search when not searching -->
+      <div *ngIf="!searchTerm && !hasPendingRequest && !isLoading" class="empty-state">
+        <ion-icon name="search-outline" class="empty-icon"></ion-icon>
+        <h3>Search for Families</h3>
+        <p>Type in the search bar to find families to join.</p>
+      </div>
+    </div>
+  </div>
+</ion-content>
+<app-bottom-navigation></app-bottom-navigation>

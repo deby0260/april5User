@@ -1,0 +1,13 @@
+{
+  "name": "fetchsafe-website",
+  "version": "1.0.0",
+  "description": "FetchSafe QR Code Display Website",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["fetchsafe", "qr-code", "family", "authorization"],
+  "author": "FetchSafe Team",
+  "license": "MIT"
+}

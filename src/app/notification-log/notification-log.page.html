@@ -1,0 +1,85 @@
+<ion-header [translucent]="true" class="custom-header">
+  <ion-toolbar>
+    <div class="header-content">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+      <div class="notification-icon" (click)="navigateToNotifications()">
+        <ion-icon name="notifications-outline"></ion-icon>
+      </div>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="notification-log-page" [scrollY]="true">
+  <div class="page-container">
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading notifications...</p>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div class="date-section" *ngIf="todayNotifications.length > 0">
+        <h2>Today</h2>
+        <div class="notifications-group">
+          <div *ngFor="let notification of todayNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
+            <div class="notification-icon-container">
+              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+            </div>
+            <div class="notification-content">
+              <div class="notification-header">
+                <ion-icon name="close" class="close-icon" (click)="dismissNotification(notification.id); $event.stopPropagation()"></ion-icon>
+              </div>
+              <h4>{{ notification.title }}</h4>
+              <p>{{ notification.subtitle }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="date-section" *ngIf="yesterdayNotifications.length > 0">
+        <h2>Yesterday</h2>
+        <div class="notifications-group">
+          <div *ngFor="let notification of yesterdayNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
+            <div class="notification-icon-container">
+              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+            </div>
+            <div class="notification-content">
+              <div class="notification-header">
+                <ion-icon name="close" class="close-icon" (click)="dismissNotification(notification.id); $event.stopPropagation()"></ion-icon>
+              </div>
+              <h4>{{ notification.title }}</h4>
+              <p>{{ notification.subtitle }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="date-section" *ngIf="olderNotifications.length > 0">
+        <div class="notifications-group">
+          <div *ngFor="let notification of olderNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
+            <div class="notification-icon-container">
+              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+            </div>
+            <div class="notification-content">
+              <div class="notification-header">
+                <ion-icon name="close" class="close-icon" (click)="dismissNotification(notification.id); $event.stopPropagation()"></ion-icon>
+              </div>
+              <h4>{{ notification.title }}</h4>
+              <p>{{ notification.subtitle }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-state" *ngIf="todayNotifications.length === 0 && yesterdayNotifications.length === 0 && olderNotifications.length === 0">
+        <ion-icon name="notifications-outline" class="empty-icon"></ion-icon>
+        <h3>No Pickup Notifications</h3>
+        <p>You'll see notifications here when children are picked up.</p>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+<app-bottom-navigation></app-bottom-navigation>
+  

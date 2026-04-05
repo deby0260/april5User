@@ -1,0 +1,72 @@
+.home-screen {
+  --background: #FFFDFD;
+
+  .splash-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .logo-container {
+    text-align: center;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+
+    /* Image-only logo */
+    img {
+      width: 200px;        /* adjust to your logo size */
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+
+  /* Removed .logo-icon and .logo-text styles */
+
+  .tagline {
+    font-size: 20px;
+    color: #666;
+    margin: 0 0 40px 0;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+
+  .action-buttons {
+    width: 100%;
+    max-width: 300px;
+    margin-top: 20px;
+
+    .login-button {
+      --background: #129CAE;
+      --background-hover: #0f7a8a;
+      --color: white;
+      margin-bottom: 16px;
+      height: 50px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .register-button {
+      --border-color: #129CAE;
+      --color: #129CAE;
+      --color-hover: white;
+      --background-hover: #129CAE;
+      height: 50px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    ion-icon {
+      margin-right: 8px;
+    }
+  }
+}

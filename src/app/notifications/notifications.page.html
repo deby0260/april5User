@@ -1,0 +1,88 @@
+<ion-content [fullscreen]="true" class="notifications-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <ion-button fill="clear" class="back-button" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h1>Notifications</h1>
+    </div>
+
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading notifications...</p>
+    </div>
+
+    <div class="notifications-list" *ngIf="!isLoading">
+      <div
+        class="notification-item"
+        *ngFor="let notification of notifications"
+        [class.unread]="!notification.isRead"
+        [class.clickable]="notification.type === 'join_request' || notification.type === 'password_change_required'"
+        (click)="onNotificationClick(notification)">
+
+        <div class="notification-icon">
+          <ion-icon
+            [name]="getNotificationIcon(notification.type)"
+            [class]="notification.type">
+          </ion-icon>
+        </div>
+
+        <div class="notification-content">
+          <div class="notification-header">
+            <h3 class="notification-title">{{ notification.title }}</h3>
+            <span class="notification-time">{{ notification.time }}</span>
+          </div>
+          <p class="notification-message">{{ notification.message }}</p>
+
+          <p class="action-hint" *ngIf="notification.type === 'join_request'">
+            Tap to approve or deny
+          </p>
+
+          <p class="action-hint password-hint" *ngIf="notification.type === 'password_change_required' && !notification.passwordChanged">
+            <ion-icon name="alert-circle"></ion-icon>
+            Tap to change your password now
+          </p>
+
+          <div *ngIf="notification.type === 'password_change_required' && !notification.passwordChanged" class="password-change-action">
+            <ion-button
+              fill="solid"
+              size="small"
+              expand="block"
+              (click)="onNotificationClick(notification); $event.stopPropagation()">
+              <ion-icon name="lock" slot="start"></ion-icon>
+              Change Password
+            </ion-button>
+          </div>
+
+          <div *ngIf="notification.type === 'password_change_required' && notification.passwordChanged" class="password-completed">
+            <ion-icon name="checkmark-circle"></ion-icon>
+            <span>Password changed successfully</span>
+          </div>
+        </div>
+
+        <div class="read-indicator" *ngIf="!notification.isRead">
+          <div class="unread-dot"></div>
+        </div>
+
+        <div class="action-arrow" *ngIf="notification.type === 'join_request' || (notification.type === 'password_change_required' && !notification.passwordChanged)">
+          <ion-icon name="chevron-forward"></ion-icon>
+        </div>
+      </div>
+
+      <div class="empty-state" *ngIf="notifications.length === 0">
+        <ion-icon name="notifications-outline" class="empty-icon"></ion-icon>
+        <h3>No notifications</h3>
+        <p>You'll see notifications here when you receive them</p>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+<app-bottom-navigation></app-bottom-navigation>

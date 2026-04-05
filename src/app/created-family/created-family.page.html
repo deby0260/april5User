@@ -1,0 +1,113 @@
+<ion-content [fullscreen]="true" class="created-family-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading family data...</p>
+    </div>
+
+    <div *ngIf="!isLoading" class="family-info-section">
+      <h1 class="family-name">{{ familyData.familyName }}</h1>
+      <p class="created-date" *ngIf="familyData.createdDate">Created on {{ familyData.createdDate }}</p>
+    </div>
+
+    <div *ngIf="!isLoading" class="family-members-section">
+      <h3 class="section-title">Family Members</h3>
+
+      <div class="members-list">
+        <div *ngFor="let member of familyData.members" class="member-item">
+          <div class="member-avatar">
+            <img
+              *ngIf="member.profilePicture"
+              [src]="member.profilePicture"
+              [alt]="member.name"
+              class="member-photo">
+            <ion-icon
+              *ngIf="!member.profilePicture"
+              name="person-circle"
+              class="avatar-icon">
+            </ion-icon>
+          </div>
+          <div class="member-info">
+            <h4 class="member-name">{{ member.name }}</h4>
+            <p class="member-contact">{{ member.email }}</p>
+            <p class="member-phone">{{ member.contactNumber }}</p>
+            <ion-chip [color]="getRoleColor(member.role)" class="role-chip">
+              {{ getRoleDisplayName(member.role) }}
+            </ion-chip>
+          </div>
+          <div class="member-actions" *ngIf="canManageFamily && member.role !== 'owner' && !isCurrentUser(member)">
+            <ion-button
+              fill="clear"
+              size="small"
+              (click)="changeRole(member)"
+              class="action-button"
+              [title]="'Change ' + member.name + '\'s role'">
+              <ion-icon name="settings-outline"></ion-icon>
+            </ion-button>
+            <ion-button
+              fill="clear"
+              size="small"
+              color="danger"
+              (click)="removeMember(member)"
+              class="action-button remove-button"
+              [title]="'Remove ' + member.name + ' from family'">
+              <ion-icon name="trash-outline"></ion-icon>
+            </ion-button>
+          </div>
+          <div class="creator-badge" *ngIf="member.role === 'owner'">
+            <ion-chip color="primary" class="creator-chip">
+              <ion-icon name="star"></ion-icon>
+              <ion-label>Creator</ion-label>
+            </ion-chip>
+          </div>
+        </div>
+
+        <div *ngIf="familyData.children.length > 0" class="children-section">
+          <h4 class="children-title">Children</h4>
+
+          <div *ngFor="let child of familyData.children" class="member-item child-item">
+            <div class="member-avatar">
+              <img
+                *ngIf="child.profilePicture"
+                [src]="child.profilePicture"
+                [alt]="child.name"
+                class="child-photo">
+              <ion-icon
+                *ngIf="!child.profilePicture"
+                name="person-circle"
+                class="avatar-icon"></ion-icon>
+            </div>
+            <div class="member-info">
+              <div class="verification-status" *ngIf="child.isVerified">
+                <ion-chip color="success" class="verified-chip">
+                  <ion-icon name="checkmark-circle" slot="start"></ion-icon>
+                  <ion-label>Verified</ion-label>
+                </ion-chip>
+              </div>
+              <div class="verification-status" *ngIf="!child.isVerified">
+                <ion-chip color="warning" class="unverified-chip">
+                  <ion-icon name="time" slot="start"></ion-icon>
+                  <ion-label>Pending Verification</ion-label>
+                </ion-chip>
+              </div>
+
+              <h4 class="member-name">{{ child.name }}</h4>
+              <p class="member-role">{{ child.gradeLevel }}</p>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+    </div>
+
+  </div>
+</ion-content>
+
+<app-bottom-navigation></app-bottom-navigation>

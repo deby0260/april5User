@@ -1,0 +1,103 @@
+<ion-content [fullscreen]="true" class="view-consent-letter-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <ion-button fill="clear" class="back-button" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h1>Consent Letter</h1>
+    </div>
+
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading consent letters...</p>
+    </div>
+
+    <div *ngIf="!isLoading && consentLetters.length === 0" class="empty-state">
+      <ion-icon name="document-text-outline" class="empty-icon"></ion-icon>
+      <h3>No Consent Letters</h3>
+      <p>You haven't created any consent letters yet.</p>
+    </div>
+
+    <div *ngIf="!isLoading && consentLetters.length > 1" class="letters-list">
+      <h3>Select a Consent Letter</h3>
+      <div class="letter-item"
+           *ngFor="let letter of consentLetters"
+           [class.selected]="selectedLetter?.id === letter.id"
+           (click)="selectLetter(letter)">
+        <div class="letter-preview">
+          <p class="letter-text">{{ letter.letter | slice:0:50 }}...</p>
+          <span class="letter-date">{{ letter.dateIssued?.toDate() | date:'MMM dd, yyyy' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!isLoading && selectedLetter" class="consent-card">
+      <div class="authorization-section">
+        <p class="authorization-text">{{ selectedLetter.letter }}</p>
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-display">
+          <div class="signature-line">
+            <img *ngIf="selectedLetter.signature"
+                 [src]="selectedLetter.signature"
+                 alt="Signature"
+                 class="signature-image">
+            <span *ngIf="!selectedLetter.signature" class="no-signature">No signature</span>
+          </div>
+          <p class="signature-label">Parent/Guardian Signature</p>
+        </div>
+      </div>
+
+      <div class="options-section">
+        <div class="option-item">
+          <ion-icon name="checkmark-circle" class="option-icon enabled"></ion-icon>
+          <span class="option-label">Emergency Fetcher</span>
+          <ion-icon
+            [name]="selectedLetter.emergencyFetcher ? 'checkmark-circle' : 'close-circle'"
+            [class]="selectedLetter.emergencyFetcher ? 'status-enabled' : 'status-disabled'">
+          </ion-icon>
+        </div>
+
+        <div class="option-item">
+          <ion-icon name="checkmark-circle" class="option-icon enabled"></ion-icon>
+          <span class="option-label">One time Fetcher</span>
+          <ion-icon
+            [name]="selectedLetter.oneTimeFetcher ? 'checkmark-circle' : 'close-circle'"
+            [class]="selectedLetter.oneTimeFetcher ? 'status-enabled' : 'status-disabled'">
+          </ion-icon>
+        </div>
+      </div>
+
+      <div class="validity-section">
+        <div class="validity-item">
+          <span class="validity-label">Date Issued</span>
+          <span class="validity-value">{{ selectedLetter.dateIssued?.toDate() | date:'MMM dd, yyyy' }}</span>
+        </div>
+
+        <div class="validity-item">
+          <span class="validity-label">Valid Until</span>
+          <span class="validity-value">{{ selectedLetter.validUntil }}</span>
+        </div>
+      </div>
+
+      <div class="action-section">
+        <ion-button
+          expand="block"
+          class="done-button"
+          (click)="goBack()">
+          Done
+        </ion-button>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+<app-bottom-navigation></app-bottom-navigation>

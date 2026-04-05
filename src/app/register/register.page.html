@@ -1,0 +1,107 @@
+<ion-content [fullscreen]="true" class="register-page">
+  <div class="register-container">
+    <div class="logo-section">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h2>Create your secure account</h2>
+    </div>
+
+    <div class="form-section">
+      <ion-item class="input-item">
+        <ion-input
+          type="text"
+          placeholder="Full Name"
+          [(ngModel)]="fullName"
+          class="custom-input">
+        </ion-input>
+      </ion-item>
+
+      <ion-item class="input-item">
+        <ion-input
+          type="email"
+          placeholder="Email Address"
+          [(ngModel)]="email"
+          class="custom-input">
+        </ion-input>
+      </ion-item>
+
+      <ion-item class="input-item">
+        <ion-input
+          type="tel"
+          placeholder="Contact Number"
+          [(ngModel)]="contactNumber"
+          class="custom-input">
+        </ion-input>
+      </ion-item>
+
+      <ion-item class="input-item">
+        <ion-input
+          type="password"
+          placeholder="Password"
+          [(ngModel)]="password"
+          class="custom-input">
+        </ion-input>
+      </ion-item>
+
+      <ion-item class="input-item">
+        <ion-input
+          type="password"
+          placeholder="Confirm Password"
+          [(ngModel)]="confirmPassword"
+          class="custom-input">
+        </ion-input>
+      </ion-item>
+
+      <div class="photo-upload">
+        <div class="photo-label">
+          <span class="required-label">Profile Photo *</span>
+          <span class="required-note">(Required)</span>
+        </div>
+
+        <div class="photo-preview-container" *ngIf="profilePicture">
+          <div class="photo-preview">
+            <img [src]="profilePicture" alt="Profile Picture" class="preview-image">
+            <ion-button
+              fill="clear"
+              class="remove-photo-button"
+              (click)="removePhoto()">
+              <ion-icon name="close-circle" color="danger"></ion-icon>
+            </ion-button>
+          </div>
+        </div>
+
+        <ion-button
+          fill="outline"
+          class="upload-button"
+          [color]="!profilePicture ? 'danger' : 'primary'"
+          (click)="selectPhoto()">
+          <ion-icon name="camera" slot="start"></ion-icon>
+          {{ profilePicture ? 'Change Profile Photo' : 'Upload Profile Photo *' }}
+        </ion-button>
+
+        <div class="photo-requirement-note" *ngIf="!profilePicture">
+          <ion-text color="danger">
+            <small>Profile picture is required to complete registration</small>
+          </ion-text>
+        </div>
+      </div>
+
+      <ion-button
+        expand="block"
+        class="register-button"
+        [disabled]="!isFormValid() || isLoading"
+        (click)="register()">
+        {{ isLoading ? 'Creating Account...' : 'Register' }}
+      </ion-button>
+
+      <div class="login-link">
+        <span>Already have an account? </span>
+        <a href="#" (click)="goToLogin()" class="login-text">Login</a>
+      </div>
+    </div>
+  </div>
+</ion-content>

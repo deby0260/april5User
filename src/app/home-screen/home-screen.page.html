@@ -1,0 +1,22 @@
+<ion-content [fullscreen]="true" class="home-screen">
+  <div class="splash-container">
+    <div class="logo-container">
+      <div class="logo">
+        <img src="assets/logo.png" alt="FetchSafe logo" />
+      </div>
+      <p class="tagline">Because every pickup deserves peace of mind</p>
+    </div>
+
+    <div class="action-buttons">
+      <ion-button expand="block" fill="solid" class="login-button" (click)="navigateToLogin()">
+        <ion-icon name="log-in-outline" slot="start"></ion-icon>
+        Login
+      </ion-button>
+
+      <ion-button expand="block" fill="outline" class="register-button" (click)="navigateToRegister()">
+        <ion-icon name="person-add-outline" slot="start"></ion-icon>
+        Create Account
+      </ion-button>
+    </div>
+  </div>
+</ion-content>

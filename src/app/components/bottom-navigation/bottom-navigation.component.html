@@ -1,0 +1,59 @@
+<div class="bottom-navigation">
+  <div class="nav-container">
+    <div class="nav-item"
+         [class.active]="isCurrentRoute('/home')"
+         (click)="navigateToHome()">
+      <ion-icon name="home"></ion-icon>
+      <span>Home</span>
+    </div>
+
+    <div class="nav-item"
+         [class.active]="isCurrentRoute('/created-family') || isCurrentRoute('/register-create-family')"
+         (click)="navigateToFamily()">
+      <ion-icon name="people"></ion-icon>
+      <span>Family</span>
+    </div>
+
+    
+    <div class="nav-item panic-center">
+      <ion-button
+        class="panic-button"
+        [class.disabled]="!userHasFamily"
+        [class.active]="panicState === 'pressing'"
+        [disabled]="!userHasFamily || panicState === 'pressing'"
+        fill="clear"
+        (click)="triggerPanic()"
+        (mousedown)="onPanicMouseDown()"
+        (mouseup)="onPanicMouseUp()">
+        <div class="button-content">
+          <ion-icon *ngIf="panicState === 'idle'" name="alert-circle"></ion-icon>
+          <ion-icon *ngIf="panicState === 'pressing'" name="hourglass" class="spinning"></ion-icon>
+          <span>{{ getPanicButtonText() }}</span>
+        </div>
+      </ion-button>
+      <div class="panic-ripples" *ngIf="panicState === 'pressing'">
+        <div class="ripple ripple-1"></div>
+        <div class="ripple ripple-2"></div>
+        <div class="ripple ripple-3"></div>
+      </div>
+    </div>
+
+    <div class="nav-item"
+         [class.active]="isCurrentRoute('/notification-log')"
+         [class.disabled-nav]="!userHasFamily"
+         (click)="navigateToMenu()">
+      <ion-icon name="notifications"></ion-icon>
+      <span>Notification</span>
+      <div class="nav-lock" *ngIf="!userHasFamily">
+        <ion-icon name="lock-closed" class="tiny-lock"></ion-icon>
+      </div>
+    </div>
+
+    <div class="nav-item"
+         [class.active]="isCurrentRoute('/settings')"
+         (click)="navigateToSettings()">
+      <ion-icon name="settings"></ion-icon>
+      <span>Settings</span>
+    </div>
+  </div>
+</div>

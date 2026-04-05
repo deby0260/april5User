@@ -1,0 +1,265 @@
+.created-family-page {
+  --background: #FFFDFD;
+}
+
+.page-container {
+  padding: 20px 16px;
+  min-height: calc(100vh - 60px);
+  padding-bottom: 100px;
+}
+
+.loading-section {
+  text-align: center;
+  padding: 40px 20px;
+
+  ion-spinner {
+    margin-bottom: 16px;
+  }
+
+  p {
+    color: #666;
+    font-size: 16px;
+  }
+}
+
+.header-section {
+  text-align: center;
+  margin-bottom: 30px;
+
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 160px;
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+}
+
+.family-info-section {
+  text-align: center;
+  margin-bottom: 30px;
+
+  .family-name {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 0 0 8px 0;
+  }
+
+  .created-date {
+    font-size: 14px;
+    color: #999;
+    margin: 0 0 20px 0;
+  }
+}
+
+.family-members-section {
+  margin-bottom: 40px;
+
+  .section-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin: 0 0 20px 0;
+  }
+
+  .children-section {
+    margin-top: 20px;
+
+    .children-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 12px 0;
+    }
+  }
+
+  .members-list {
+    .member-item {
+      display: flex;
+      align-items: center;
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+      &.child-item {
+        margin-left: 20px;
+      }
+
+      .member-avatar {
+        margin-right: 16px;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .avatar-icon {
+          font-size: 48px;
+          color: #20b2aa;
+        }
+
+        .member-photo {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #20b2aa;
+        }
+
+        .child-photo {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #20b2aa;
+        }
+      }
+
+      .member-info {
+        flex: 1;
+
+        .member-name {
+          font-size: 16px;
+          font-weight: 600;
+          color: #333;
+          margin: 0 0 2px 0;
+        }
+
+        .member-contact {
+          font-size: 14px;
+          color: #666;
+          margin: 2px 0;
+        }
+
+        .member-phone {
+          font-size: 14px;
+          color: #666;
+          margin: 2px 0;
+        }
+
+        .member-role {
+          font-size: 14px;
+          color: #666;
+          margin: 0;
+        }
+
+        .role-chip {
+          margin-top: 8px;
+          font-size: 12px;
+          height: 24px;
+        }
+      }
+
+      .member-actions {
+        margin-left: 12px;
+
+        .action-button {
+          --color: #20b2aa;
+          --padding-start: 8px;
+          --padding-end: 8px;
+        }
+
+        .remove-button {
+          --color: var(--ion-color-danger);
+          margin-left: 4px;
+        }
+      }
+
+      .creator-badge {
+        margin-left: 12px;
+
+        .creator-chip {
+          font-size: 11px;
+          height: 20px;
+
+          ion-icon {
+            font-size: 12px;
+            margin-right: 2px;
+          }
+        }
+      }
+    }
+
+    .add-member-item {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #f0f0f0;
+
+      .add-member-button {
+        --color: #20b2aa;
+        font-size: 16px;
+      }
+    }
+  }
+}
+
+.action-section {
+  .edit-family-button {
+    --background: #20b2aa;
+    --border-radius: 25px;
+    height: 50px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+}
+
+.custom-tab-bar {
+  --background: white;
+  --border: 1px solid #e0e0e0;
+
+  .tab-button {
+    --color: #999;
+    --color-selected: #20b2aa;
+
+    &.active {
+      --color: #20b2aa;
+    }
+  }
+}
+
+.restricted-message {
+  padding: 16px;
+  text-align: center;
+}
+
+.restriction-chip {
+  --background: rgba(255, 193, 7, 0.1);
+  --color: var(--ion-color-warning);
+}
+
+
+.verification-status {
+  margin-bottom: 8px;
+
+  .verified-chip {
+    --background: #2dd36f;
+    --color: white;
+    font-size: 12px;
+    font-weight: 500;
+
+    ion-icon {
+      font-size: 14px;
+    }
+  }
+
+  .unverified-chip {
+    --background: #ffc409;
+    --color: #1e1e1e;
+    font-size: 12px;
+    font-weight: 500;
+
+    ion-icon {
+      font-size: 14px;
+    }
+  }
+}

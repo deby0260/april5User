@@ -1,0 +1,120 @@
+.login-page {
+  --background: #FFFDFD;
+  --brand: #129CAE; 
+
+  .login-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 30px 20px;
+  }
+
+  .logo-section {
+    text-align: center;
+    margin-bottom: 60px;
+
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      img {
+        width: 200px;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    }
+  }
+
+  .form-section {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+
+    .input-container {
+      margin-bottom: 20px;
+
+      .custom-input {
+        --background: var(--brand) !important;
+        --color: white !important;
+        --placeholder-color: white !important;
+        --border-radius: 25px;
+        --padding-start: 20px;
+        --padding-end: 20px;
+        height: 50px;
+        font-size: 16px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(18, 156, 174, 0.3); /* #129CAE @ 0.3 */
+        border-radius: 25px;
+        background: var(--brand) !important;
+
+        .native-input {
+          color: white !important;
+          background: transparent !important;
+
+          &::placeholder {
+            color: white !important;
+            opacity: 1 !important;
+          }
+        }
+
+        input {
+          color: white !important;
+          background: transparent !important;
+
+          &::placeholder {
+            color: white !important;
+            opacity: 1 !important;
+          }
+        }
+      }
+    }
+
+    .forgot-password {
+      text-align: center;
+      margin: 10px 0 30px 0;
+
+      .forgot-link {
+        color: var(--brand);
+        text-decoration: none;
+        font-size: 14px;
+        font-style: italic;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+
+    .login-button {
+      --background: var(--brand);
+      --border-radius: 25px;
+      height: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      --color: white;
+      box-shadow: 0 4px 12px rgba(18, 156, 174, 0.4); /* #129CAE @ 0.4 */
+    }
+
+    .register-button {
+      --border-color: var(--brand);
+      --color: var(--brand);
+      --border-radius: 25px;
+      height: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(18, 156, 174, 0.2); /* #129CAE @ 0.2 */
+    }
+
+    .back-button {
+      --color: var(--brand);
+      font-size: 14px;
+      margin-top: 8px;
+    }
+  }
+}

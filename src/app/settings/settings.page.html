@@ -1,0 +1,148 @@
+<ion-header [translucent]="true" class="custom-header">
+  <ion-toolbar>
+    <div class="header-content">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+      <div class="notification-icon" (click)="navigateToNotifications()">
+        <ion-icon name="notifications-outline"></ion-icon>
+      </div>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" [scrollY]="true" class="settings-page">
+  <div class="page-container">
+  
+    <div class="settings-section" *ngIf="currentUser">
+      <h3>Profile</h3>
+      <div class="settings-group">
+        <div class="profile-info">
+          <div class="profile-details">
+            <h4>{{ currentUser.fullName }}</h4>
+            <p>{{ currentUser.email }}</p>
+            <p>{{ currentUser.contactNumber }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <h3>Notification</h3>
+      <div class="settings-group">
+        <div class="setting-item">
+          <span class="setting-label">Enable app notifications</span>
+          <ion-toggle
+            [(ngModel)]="settings.appNotifications"
+            class="setting-toggle"
+            (ionChange)="saveSettings()">
+          </ion-toggle>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label">Enable SMS notifications</span>
+          <ion-toggle
+            [(ngModel)]="settings.smsNotifications"
+            class="setting-toggle"
+            (ionChange)="saveSettings()">
+          </ion-toggle>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <h3>Appearance</h3>
+      <div class="settings-group">
+        <div class="setting-item">
+          <span class="setting-label">Dark Mode</span>
+          <ion-toggle
+            [(ngModel)]="settings.darkMode"
+            class="setting-toggle"
+            (ionChange)="toggleDarkMode()">
+          </ion-toggle>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <h3>Account</h3>
+      <div class="settings-group">
+        <div class="setting-item clickable" (click)="changeLanguage()">
+          <span class="setting-label">Language</span>
+          <div class="setting-value">
+            <span>{{ settings.language }}</span>
+            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
+          </div>
+        </div>
+
+        <div class="setting-item clickable" (click)="editProfile()">
+          <span class="setting-label">Edit Profile</span>
+          <div class="setting-value">
+            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <h3>Privacy & Security</h3>
+      <div class="settings-group">
+        <div class="setting-item clickable" (click)="editPrivacy()">
+          <span class="setting-label">Privacy Settings</span>
+          <div class="setting-value">
+            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
+          </div>
+        </div>
+
+        <div class="setting-item clickable" (click)="changePassword()">
+          <span class="setting-label">Change Password</span>
+          <div class="setting-value">
+            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <h3>App Data</h3>
+      <div class="settings-group">
+        <div class="setting-item clickable" (click)="clearData()">
+          <span class="setting-label">Clear App Data</span>
+          <div class="setting-value">
+            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="settings-section">
+      <div class="settings-group">
+        <div class="logout-button-container">
+          <ion-button
+            expand="block"
+            fill="outline"
+            color="danger"
+            class="logout-button"
+            (click)="logout()">
+            <ion-icon name="log-out-outline" slot="start"></ion-icon>
+            Logout
+          </ion-button>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="app-version">
+      <p>FetchSafe v1.0.0</p>
+    </div>
+  </div>
+</ion-content>
+
+
+<app-bottom-navigation></app-bottom-navigation>

@@ -1,0 +1,185 @@
+.register-page {
+  --background: #FFFDFD; /* new background */
+  --brand: #129CAE;      /* accent color */
+
+  .register-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .logo-section {
+    text-align: center;
+    margin: 20px 0;
+
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      /* image-only logo */
+      img {
+        width: 200px;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    }
+  }
+
+  .title-section {
+    text-align: center;
+    margin-bottom: 30px;
+
+    h2 {
+      font-size: 18px;
+      color: #333;
+      margin: 0;
+      font-weight: normal;
+    }
+  }
+
+  .form-section {
+    flex: 1;
+
+    .input-item {
+      --background: transparent;
+      --border-color: var(--brand);
+      --border-radius: 25px;
+      --border-width: 2px;
+      --padding-start: 20px;
+      --padding-end: 20px;
+      margin-bottom: 15px;
+
+      .custom-input {
+        --color: #333;
+        --placeholder-color: #666;
+        font-size: 16px;
+      }
+    }
+
+    .photo-upload {
+      margin: 20px 0;
+      text-align: center;
+
+      .photo-label {
+        margin-bottom: 12px;
+        text-align: left;
+
+        .required-label {
+          font-size: 16px;
+          font-weight: 500;
+          color: #333;
+        }
+
+        .required-note {
+          font-size: 12px;
+          color: #e74c3c;
+          margin-left: 8px;
+          font-weight: 500;
+        }
+      }
+
+      .photo-preview-container {
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: center;
+
+        .photo-preview {
+          position: relative;
+          display: inline-block;
+
+          .preview-image {
+            width: 120px;
+            height: 120px;
+            border-radius: 60px;
+            object-fit: cover;
+            border: 3px solid var(--brand);
+            box-shadow: 0 4px 12px rgba(18, 156, 174, 0.3); /* #129CAE @ 0.3 */
+          }
+
+          .remove-photo-button {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            --padding-start: 0;
+            --padding-end: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+
+            ion-icon {
+              font-size: 24px;
+            }
+          }
+        }
+      }
+
+      .upload-button {
+        --border-color: var(--brand);
+        --color: var(--brand);
+        --border-radius: 25px;
+        height: 45px;
+        font-size: 14px;
+        font-weight: 500;
+
+        ion-icon { margin-right: 8px; }
+
+        // Style for required state (when no photo selected)
+        &[color="danger"] {
+          --border-color: #e74c3c;
+          --color: #e74c3c;
+        }
+      }
+
+      .photo-requirement-note {
+        margin-top: 8px;
+        text-align: center;
+
+        small {
+          font-size: 12px;
+          font-style: italic;
+        }
+      }
+    }
+
+    .register-button {
+      --background: var(--brand);
+      --border-radius: 25px;
+      height: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 20px 0;
+      box-shadow: 0 4px 12px rgba(18, 156, 174, 0.4); /* #129CAE @ 0.4 */
+
+      &[disabled] {
+        --background: #cccccc;
+        --color: #666666;
+        box-shadow: none;
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+
+    .login-link {
+      text-align: center;
+      margin-top: 10px;
+
+      span {
+        color: #666;
+        font-size: 14px;
+      }
+
+      .login-text {
+        color: var(--brand);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: bold;
+      }
+    }
+  }
+}

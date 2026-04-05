@@ -1,0 +1,171 @@
+.settings-page {
+  --background: #FFFDFD;
+}
+
+/* Match previous white header behavior even with translucent toolbars */
+.custom-header {
+  --background: #FFFDFD;
+  background: #FFFDFD;
+
+  ion-toolbar {
+    --background: #FFFDFD;   /* Ionic toolbar bg */
+    --color: #111;
+    background: #FFFDFD;     /* fallback */
+    border-bottom: 1px solid #eaeaea; /* subtle divider like before */
+  }
+
+  /* Ensure compatibility with shadow DOM builds */
+  ion-toolbar::part(background) {
+    background: #FFFDFD;
+  }
+
+  /* Prevent dark mode from re-darkening the header */
+  @media (prefers-color-scheme: dark) {
+    ion-toolbar {
+      --background: #FFFDFD;
+      background: #FFFDFD;
+    }
+    ion-toolbar::part(background) {
+      background: #FFFDFD;
+    }
+  }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+
+    .logo {
+      display: flex;
+      align-items: center;
+
+      img {
+        width: 160px;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    }
+
+    .notification-icon {
+      font-size: 24px;
+      color: #129CAE;
+      cursor: pointer;
+      transition: color 0.3s ease;
+
+      &:hover { color: #0e7ec9; }
+    }
+  }
+}
+
+.page-container {
+  padding: 20px 16px 100px 16px; // Extra bottom padding for scrolling
+  min-height: calc(100vh - 60px);
+}
+
+.settings-section {
+  margin-bottom: 30px;
+
+  h3 {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin: 0 0 16px 0;
+  }
+
+  .settings-group {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:last-child { border-bottom: none; }
+
+      &.clickable {
+        cursor: pointer;
+        &:hover { background: #f8f9fa; }
+      }
+
+      .setting-label {
+        font-size: 16px;
+        color: #333;
+        flex: 1;
+      }
+
+      .setting-value {
+        display: flex;
+        align-items: center;
+        color: #666;
+        font-size: 16px;
+
+        .chevron-icon {
+          margin-left: 8px;
+          font-size: 18px;
+          color: #999;
+        }
+      }
+
+      .setting-toggle {
+        --handle-background: white;
+        --handle-background-checked: white;
+        --background: #e0e0e0;
+        --background-checked: #20b2aa; // keep as-is unless you want #129CAE
+        --handle-spacing: 2px;
+      }
+    }
+
+    .profile-info {
+      padding: 20px;
+      text-align: center;
+
+      .profile-details {
+        h4 {
+          font-size: 20px;
+          font-weight: 600;
+          color: #333;
+          margin: 0 0 8px 0;
+        }
+        p {
+          font-size: 14px;
+          color: #666;
+          margin: 4px 0;
+        }
+      }
+    }
+
+    .logout-button-container {
+      padding: 20px;
+
+      .logout-button {
+        --border-color: #ff6b6b;
+        --color: #ff6b6b;
+        height: 50px;
+        font-size: 16px;
+        font-weight: 600;
+
+        &:hover { --background: rgba(255,107,107,.1); }
+      }
+    }
+  }
+}
+
+.app-version {
+  text-align: center;
+  margin-top: 20px;
+  padding: 20px;
+
+  p {
+    font-size: 12px;
+    color: #999;
+    margin: 0;
+  }
+}

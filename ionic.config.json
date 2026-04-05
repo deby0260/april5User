@@ -1,0 +1,7 @@
+{
+  "name": "fetchSafe",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}

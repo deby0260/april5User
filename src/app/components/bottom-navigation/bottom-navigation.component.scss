@@ -1,0 +1,270 @@
+.bottom-navigation {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #FFFDFD; 
+  border-top: 1px solid #129CAE;
+  z-index: 9999; 
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  pointer-events: auto; 
+
+  .nav-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 8px 0;
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+      position: relative;
+
+      &:active:not(.disabled-nav):not(.panic-center) {
+        background-color: rgba(18, 156, 174, 0.1);
+      }
+
+      ion-icon {
+        font-size: 24px;
+        margin-bottom: 4px;
+        color: #129CAE;
+      }
+
+      span {
+        font-size: 12px;
+        color: #129CAE;
+      }
+
+      &.active {
+        ion-icon, span {
+          color: #0e7ec9;
+        }
+      }
+
+      &:hover:not(.active):not(.panic-center):not(.disabled-nav) {
+        ion-icon, span {
+          color: #0e7ec9;
+        }
+      }
+
+      &.disabled-nav {
+        opacity: 0.5;
+        cursor: not-allowed;
+
+        ion-icon, span {
+          color: rgba(18, 156, 174, 0.3) !important;
+        }
+
+        .nav-lock {
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          background: rgba(0, 0, 0, 0.1);
+          border-radius: 50%;
+          padding: 2px;
+
+          .tiny-lock {
+            font-size: 10px;
+            color: #ff6b6b;
+          }
+        }
+      }
+
+      &.panic-center {
+        flex: 1.5;
+        position: relative;
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .panic-ripples {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 100px;
+          height: 50px;
+          pointer-events: none;
+
+          .ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #dc3545;
+            border-radius: 50%;
+            opacity: 0.6;
+
+            &.ripple-1 {
+              width: 100px;
+              height: 100px;
+              animation: ripple-spread 1.2s ease-out infinite;
+            }
+
+            &.ripple-2 {
+              width: 150px;
+              height: 150px;
+              animation: ripple-spread 1.2s ease-out infinite 0.4s;
+            }
+
+            &.ripple-3 {
+              width: 200px;
+              height: 200px;
+              animation: ripple-spread 1.2s ease-out infinite 0.8s;
+            }
+          }
+        }
+
+        .panic-button {
+          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+          color: white !important;
+          border: none !important;
+          border-radius: 25px !important;
+          font-size: 14px;
+          font-weight: bold;
+          height: 50px;
+          width: 100px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4) !important;
+          margin: 0 auto;
+          padding: 0;
+          position: relative;
+          z-index: 10002;
+          pointer-events: auto;
+          cursor: pointer;
+          --background: transparent;
+          --background-activated: #c82333;
+          --color: white;
+          --box-shadow: none;
+          --border: none;
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          .button-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+
+            ion-icon {
+              font-size: 16px;
+              color: white;
+
+              &.spinning {
+                animation: spin 1s linear infinite;
+              }
+
+              &.success-check {
+                animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+                color: #28a745;
+              }
+
+              &.error-icon {
+                animation: shake 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+                color: #ffc107;
+              }
+            }
+
+            span {
+              color: white !important;
+              font-size: 10px;
+              font-weight: 900;
+              letter-spacing: 0.4px;
+              line-height: 1.2;
+              max-width: 90px;
+              text-align: center;
+              word-break: break-word;
+            }
+          }
+
+          &.pressing {
+            background: linear-gradient(135deg, #c82333 0%, #a41e2b 100%) !important;
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6), 0 0 20px rgba(220, 53, 69, 0.4) !important;
+            transform: scale(1.05);
+            animation: pulse-urgent 0.6s ease-in-out infinite;
+          }
+
+          &.active {
+            animation: shake-intense 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          }
+
+
+          &.disabled {
+            background: #6c757d !important;
+            opacity: 0.6;
+            box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3) !important;
+            cursor: not-allowed;
+            animation: none;
+
+            span {
+              color: #e9ecef !important;
+            }
+          }
+
+          &:not(.disabled):not([disabled]) {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+          }
+
+          &.button-clear {
+            --background: transparent;
+            --background-activated: transparent;
+            --background-focused: transparent;
+            --background-hover: transparent;
+          }
+        }
+      }
+    }
+  }
+}
+
+@keyframes ripple-spread {
+  from {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2);
+  }
+}
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6), 0 0 20px rgba(220, 53, 69, 0.4);
+  }
+  50% {
+    box-shadow: 0 6px 30px rgba(220, 53, 69, 0.8), 0 0 30px rgba(220, 53, 69, 0.6);
+  }
+}
+
+@keyframes shake-intense {
+  0%, 100% {
+    transform: translateX(0) scale(1.05);
+  }
+  10%, 30%, 50%, 70% {
+    transform: translateX(-4px) scale(1.05);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(4px) scale(1.05);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

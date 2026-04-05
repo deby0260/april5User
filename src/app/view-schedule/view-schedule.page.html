@@ -1,0 +1,115 @@
+<ion-content [fullscreen]="true" class="view-schedule-page" [scrollY]="true">
+  <div class="page-container">
+    
+    <div class="header-section">
+      <ion-button fill="clear" class="back-button" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    
+    <div class="title-section">
+      <h1>View Schedule</h1>
+    </div>
+
+    
+    <div class="schedule-section">
+      <h2 class="section-title">{{ familyName }} Schedule</h2>
+
+      
+      <div *ngIf="isLoading" class="loading-container">
+        <ion-spinner name="crescent"></ion-spinner>
+        <p>Loading schedules...</p>
+      </div>
+
+      
+      <div *ngIf="!isLoading && schedules.length === 0" class="empty-state">
+        <ion-icon name="calendar-outline" class="empty-icon"></ion-icon>
+        <h3>No Schedules Found</h3>
+        <p>No pickup schedules have been created for your family yet.</p>
+        <ion-button fill="outline" (click)="navigateTo('/scheduling')">
+          Create Schedule
+        </ion-button>
+      </div>
+
+      
+      <div *ngIf="!isLoading && schedules.length > 0" class="schedule-container">
+        <div class="schedule-list">
+          <div class="schedule-item" *ngFor="let schedule of schedules">
+            <div class="schedule-card" [class.completed]="isScheduleCompleted(schedule)">
+              <div class="schedule-header">
+                <div class="date-info">
+                  <span class="date-display">{{ getFormattedDate(schedule.date) }}</span>
+                  <span class="days-display">{{ schedule.days }}</span>
+                </div>
+                <div class="time-info">
+                  <ion-icon name="time-outline"></ion-icon>
+                  <span class="time-display">{{ getFormattedTime(schedule.time) }}</span>
+                </div>
+                <div class="status-info" *ngIf="isScheduleCompleted(schedule)">
+                  <ion-icon name="checkmark-circle" class="completed-icon"></ion-icon>
+                  <span class="status-text">Completed</span>
+                </div>
+              </div>
+
+              <div class="schedule-body">
+                <div class="fetcher-info">
+                  <ion-icon name="person-outline"></ion-icon>
+                  <div class="fetcher-details">
+                    <span class="fetcher-label">Assigned Fetcher:</span>
+                    <span class="fetcher-name">{{ schedule.fetcherName }}</span>
+                  </div>
+                </div>
+
+                <div class="child-info" *ngIf="schedule.childName">
+                  <ion-icon name="school-outline"></ion-icon>
+                  <div class="child-details">
+                    <span class="child-label">Child:</span>
+                    <span class="child-name">{{ schedule.childName }} - {{ schedule.childGrade }}</span>
+                  </div>
+                </div>
+
+                <div class="creator-info">
+                  <ion-icon name="create-outline"></ion-icon>
+                  <div class="creator-details">
+                    <span class="creator-label">Created by:</span>
+                    <span class="creator-name">{{ schedule.parentName }}</span>
+                  </div>
+                </div>
+
+                
+                <div class="completion-info" *ngIf="isScheduleCompleted(schedule)">
+                  <ion-icon name="checkmark-done-outline"></ion-icon>
+                  <div class="completion-details">
+                    <span class="completion-label">Completed by:</span>
+                    <span class="completion-name">{{ schedule.completedBy }}</span>
+                  </div>
+                </div>
+              </div>
+
+              
+              <div class="schedule-actions" *ngIf="!isScheduleCompleted(schedule)">
+                <ion-button
+                  fill="solid"
+                  color="success"
+                  size="small"
+                  [disabled]="!canMarkAsDone(schedule)"
+                  (click)="markScheduleAsDone(schedule)">
+                  <ion-icon name="checkmark" slot="start"></ion-icon>
+                  Mark as Done
+                </ion-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+
+<app-bottom-navigation></app-bottom-navigation>

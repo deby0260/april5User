@@ -1,0 +1,474 @@
+.home-page {
+  --background: #FFFDFD;
+
+  .home-container {
+    padding: 20px;
+    padding-bottom: 100px; // Add extra bottom padding for bottom navigation
+
+    .header-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        /* image-only logo */
+        img {
+          width: 160px;   /* adjust as needed */
+          height: auto;
+          display: block;
+          user-select: none;
+          -webkit-user-drag: none;
+        }
+      }
+
+      .notification-icon {
+        font-size: 24px;
+        color: #129CAE;
+        cursor: pointer;
+        transition: color 0.3s ease;
+
+        &:hover {
+          color: #0e7ec9;
+        }
+      }
+    }
+
+    .weather-section {
+      background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 20px;
+
+      .weather-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .weather-icon {
+          font-size: 24px;
+          color: white;
+        }
+
+        .weather-text {
+          display: flex;
+          flex-direction: column;
+
+          .weather-condition {
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+          }
+
+          .weather-details {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 13px;
+            margin-top: 2px;
+            font-weight: 500;
+          }
+
+          .weather-reminder {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            margin-top: 2px;
+            font-style: italic;
+          }
+        }
+      }
+    }
+
+    .welcome-section {
+      margin-bottom: 30px;
+
+      .welcome-title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+        margin: 0;
+      }
+    }
+
+    .upcoming-pickup-section {
+      margin: 20px 0;
+
+      .pickup-card {
+        background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        color: white;
+
+        .pickup-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 16px;
+
+          .pickup-icon {
+            font-size: 24px;
+            margin-right: 12px;
+            color: white;
+          }
+
+          h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+          }
+        }
+
+        .pickup-details {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+
+          .pickup-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+
+            .pickup-date {
+              font-size: 16px;
+              font-weight: bold;
+              background: rgba(255, 255, 255, 0.2);
+              padding: 6px 12px;
+              border-radius: 20px;
+            }
+
+            .pickup-time {
+              font-size: 14px;
+              font-weight: 600;
+            }
+
+            .pickup-day {
+              font-size: 12px;
+              opacity: 0.9;
+            }
+          }
+
+          .pickup-child {
+            .child-name {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 4px;
+            }
+
+            .child-grade {
+              font-size: 12px;
+              opacity: 0.9;
+            }
+          }
+
+          .pickup-fetcher {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            .fetcher-label {
+              font-size: 12px;
+              opacity: 0.9;
+            }
+
+            .fetcher-name {
+              font-size: 14px;
+              font-weight: 600;
+            }
+          }
+        }
+      }
+    }
+
+    .no-pickups-section {
+      margin: 20px 0;
+
+      .no-pickups-card {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 16px;
+        padding: 30px 20px;
+        text-align: center;
+        color: #6c757d;
+
+        .no-pickups-icon {
+          font-size: 48px;
+          margin-bottom: 16px;
+          color: #adb5bd;
+        }
+
+        h3 {
+          margin: 0 0 12px 0;
+          font-size: 18px;
+          font-weight: bold;
+          color: #495057;
+        }
+
+        p {
+          margin: 0 0 20px 0;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        ion-button {
+          --border-color: #87CEEB;
+          --color: #4682B4;
+        }
+      }
+    }
+
+    .debug-section {
+      margin: 20px 0;
+      padding: 16px;
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 8px;
+      text-align: center;
+
+      p {
+        margin: 8px 0 0 0;
+        font-size: 12px;
+        color: #856404;
+      }
+    }
+
+    .action-cards {
+      margin-bottom: 30px;
+
+      .card-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+
+        .action-card {
+          flex: 1;
+          background: white;
+          border-radius: 15px;
+          padding: 20px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          position: relative;
+
+          &:active:not(.disabled) {
+            transform: scale(0.98);
+          }
+
+          &.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+
+            .card-icon {
+              color: #ccc !important;
+            }
+
+            .card-content {
+              h3, p {
+                color: #999 !important;
+              }
+            }
+          }
+
+          .card-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+          }
+
+          .card-content {
+            h3 {
+              font-size: 16px;
+              font-weight: bold;
+              color: #333;
+              margin: 0 0 8px 0;
+            }
+
+            p {
+              font-size: 12px;
+              color: #666;
+              margin: 0;
+              line-height: 1.4;
+            }
+          }
+
+          &.analytics { .card-icon { color: #4285f4; } }
+          &.consent   { .card-icon { color: #34a853; } }
+          &.schedule  { .card-icon { color: #fbbc04; } }
+          &.qr-code   { .card-icon { color: #ea4335; } }
+
+          .lock-overlay {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            padding: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+            .lock-icon {
+              font-size: 16px;
+              color: #ff6b6b;
+            }
+          }
+        }
+      }
+    }
+
+    .upcoming-section {
+      margin-bottom: 30px;
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+
+        h2 {
+          font-size: 20px;
+          font-weight: bold;
+          color: #333;
+          margin: 0;
+        }
+
+        .view-schedule-link {
+          color: #20b2aa;
+          font-size: 14px;
+          cursor: pointer;
+          text-decoration: none;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+
+          &.disabled-link { color: #ccc; cursor: not-allowed; }
+          .small-lock { font-size: 12px; color: #ff6b6b; }
+        }
+      }
+
+      .no-pickups {
+        text-align: center;
+        padding: 40px 20px;
+        color: #666;
+
+        .no-pickups-card {
+          background: #f8f9fa;
+          border: 2px dashed #dee2e6;
+          border-radius: 16px;
+          padding: 30px 20px;
+          text-align: center;
+          color: #6c757d;
+
+          .no-pickups-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: #adb5bd;
+          }
+
+          h3 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+          }
+
+          p {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            line-height: 1.5;
+          }
+
+          ion-button {
+            --border-color: #87CEEB;
+            --color: #4682B4;
+          }
+        }
+      }
+
+      .upcoming-pickup-section {
+        margin: 16px 0;
+
+        .pickup-card {
+          background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+          border-radius: 16px;
+          padding: 20px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          color: white;
+
+          .pickup-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+
+            .pickup-icon {
+              font-size: 24px;
+              margin-right: 12px;
+              color: white;
+            }
+
+            h3 {
+              margin: 0;
+              font-size: 18px;
+              font-weight: bold;
+              color: white;
+            }
+          }
+
+          .pickup-details {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+
+            .pickup-info {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+              flex-wrap: wrap;
+
+              .pickup-date {
+                font-size: 16px;
+                font-weight: bold;
+                background: rgba(255, 255, 255, 0.2);
+                padding: 6px 12px;
+                border-radius: 20px;
+              }
+
+              .pickup-time { font-size: 14px; font-weight: 600; }
+              .pickup-day  { font-size: 12px; opacity: 0.9; }
+            }
+
+            .pickup-child {
+              .child-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+              .child-grade { font-size: 12px; opacity: 0.9; }
+            }
+
+            .pickup-fetcher {
+              display: flex; align-items: center; gap: 8px;
+
+              .fetcher-label { font-size: 12px; opacity: 0.9; }
+              .fetcher-name  { font-size: 14px; font-weight: 600; }
+            }
+          }
+        }
+      }
+    }
+
+    .consent-link-section {
+      text-align: center;
+      margin-bottom: 30px;
+
+      .consent-link {
+        color: #20b2aa;
+        font-size: 16px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        &.disabled-link { color: #ccc; cursor: not-allowed; }
+        .small-lock { font-size: 14px; color: #ff6b6b; }
+      }
+    }
+  }
+}

@@ -1,0 +1,249 @@
+.notification-log-page {
+  --background: #FFFDFD;
+}
+
+/* Force the toolbar/header background to white */
+.custom-header {
+  /* Set header & toolbar backgrounds */
+  --background: #FFFDFD;
+  background: #FFFDFD;
+
+  ion-toolbar {
+    --background: #FFFDFD;  /* primary way to color Ionic toolbar */
+    --color: #111;
+    background: #FFFDFD;
+    border-bottom: 1px solid #eaeaea; /* subtle divider */
+  }
+
+  /* Extra safety for various Ionic builds/shadow parts */
+  ion-toolbar::part(background) {
+    background: #FFFDFD;
+  }
+
+  /* Prevent dark mode from forcing a dark header */
+  @media (prefers-color-scheme: dark) {
+    ion-toolbar {
+      --background: #FFFDFD;
+      background: #FFFDFD;
+    }
+    ion-toolbar::part(background) {
+      background: #FFFDFD;
+    }
+  }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+
+    .logo {
+      display: flex;
+      align-items: center;
+
+      img {
+        width: 160px;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    }
+
+    .notification-icon {
+      font-size: 24px;
+      color: #129CAE;
+      cursor: pointer;
+      transition: color 0.3s ease;
+
+      &:hover {
+        color: #0e7ec9;
+      }
+    }
+  }
+}
+
+.page-container {
+  padding: 20px 16px 100px 16px; /* bottom padding for nav */
+}
+
+.date-section {
+  margin-bottom: 30px;
+
+  h2 {
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+    margin: 0 0 16px 0;
+  }
+
+  .notifications-group {
+    .notification-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: flex-start;
+      transition: all 0.3s ease;
+
+      &.clickable {
+        cursor: pointer;
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          background: #f8f9ff;
+        }
+
+        &:active {
+          transform: translateY(0);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+      }
+
+      .notification-icon-container {
+        margin-right: 12px;
+        padding-top: 2px;
+
+        .status-icon {
+          font-size: 24px;
+
+          &.blue   { color: #007bff; }
+          &.success{ color: #4caf50; }
+        }
+      }
+
+      .notification-content {
+        flex: 1;
+
+        .notification-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+
+          .time, .date-time {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+          }
+
+          .close-icon {
+            font-size: 20px;
+            color: #999;
+            cursor: pointer;
+
+            &:hover { color: #666; }
+          }
+        }
+
+        h4 {
+          font-size: 16px;
+          font-weight: bold;
+          color: #333;
+          margin: 0 0 4px 0;
+        }
+
+        p {
+          font-size: 14px;
+          color: #666;
+          margin: 0;
+        }
+      }
+    }
+  }
+}
+
+.loading-section {
+  text-align: center;
+  padding: 40px 20px;
+
+  ion-spinner { margin-bottom: 16px; }
+
+  p {
+    color: #666;
+    font-size: 16px;
+    margin: 0;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+
+  .empty-icon {
+    font-size: 64px;
+    color: #ccc;
+    margin-bottom: 20px;
+  }
+
+  h3 {
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 10px;
+  }
+
+  p {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+  }
+}
+
+/* Bottom navigation — unchanged */
+.bottom-navigation {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(135deg, #0e7ec9, #0056b3);
+  border-top: 1px solid #e0e0e0;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+
+  .nav-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 8px 0;
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+
+      ion-icon { font-size: 24px; margin-bottom: 4px; color: rgba(255,255,255,.7); }
+      span     { font-size: 12px; color: rgba(255,255,255,.7); }
+
+      &.active { ion-icon, span { color: #fff; } }
+
+      &:hover:not(.active):not(.panic-center) { ion-icon, span { color: #fff; } }
+
+      &.panic-center {
+        flex: 1.2;
+        .panic-button {
+          --background: #dc3545;
+          --background-activated: #c82333;
+          --color: #fff;
+          --box-shadow: none;
+          --border: none;
+          font-size: 14px;
+          font-weight: bold;
+          height: 40px; width: 80px; --border-radius: 20px;
+          text-transform: uppercase;
+          letter-spacing: .5px;
+          box-shadow: 0 2px 8px rgba(220,53,69,.3);
+          margin: 0;
+          padding: 0;
+
+          span { color: #fff; font-size: 12px; font-weight: bold; }
+        }
+      }
+    }
+  }
+}

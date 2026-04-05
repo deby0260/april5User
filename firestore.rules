@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // REGISTERD COLLECTION - User Registration
+    // ============================================
+    match /Registerd/{userId} {
+      // Allow authenticated users to create their own document during registration
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Allow authenticated users to read ANY document
+      // This is needed for:
+      // 1. Login - reading user document by UID
+      // 2. Fallback login - querying by email with where()
+      // 3. Family features - reading other users' profiles
+      allow read: if request.auth != null;
+
+      // Allow users to update their own document
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Prevent deletion for data safety
+      allow delete: if false;
+    }
+
+    // ============================================
+    // SCHEDULES COLLECTION
+    // ============================================
+    match /Schedules/{scheduleId} {
+      // Allow authenticated users full access to schedules
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // NOTIFICATIONS COLLECTION (uppercase)
+    // ============================================
+    match /Notifications/{notificationId} {
+      // Allow authenticated users full access to notifications
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // USERS COLLECTION (for push tokens, etc.)
+    // ============================================
+    match /users/{userId} {
+      // Allow authenticated users full access to user documents
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // NOTIFICATIONS COLLECTION (lowercase)
+    // ============================================
+    match /notifications/{notificationId} {
+      // Allow authenticated users full access to notifications
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // STUDENT DATA COLLECTION
+    // ============================================
+    match /StudentData/{studentId} {
+      // Allow authenticated users full access to student data
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // USER EMAILS COLLECTION
+    // ============================================
+    match /UserEmails/{emailId} {
+      // Allow authenticated users full access to user emails
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // CATCH-ALL RULE FOR ALL OTHER COLLECTIONS
+    // ============================================
+    // This handles all collections with spaces in names like:
+    // - "List Of Families"
+    // - "Join Requests"
+    // - "Consent Letters"
+    // - "Panic Alert"
+    // - "Pending Child Approvals"
+    // - "Admin Notifications"
+    // And any other collections not explicitly defined above
+    //
+    // Public QR page (fetchsafe-display-website) uses signInAnonymously() before Firestore reads.
+    // If anonymous sign-in is disabled in Firebase Console, enable it or reads will fail.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+

@@ -1,0 +1,282 @@
+.view-consent-letter-page {
+  --background: #FFFDFD;
+}
+
+.page-container {
+  padding: 20px 16px;
+  min-height: calc(100vh - 60px);
+  padding-bottom: 100px; // Space for bottom navigation
+}
+
+.header-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+
+  .back-button {
+    --color: #129CAE;
+    margin-right: 16px;
+    --padding-start: 0;
+    --padding-end: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+
+    img {
+      width: 160px;
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+}
+
+.title-section {
+  text-align: center;
+  margin-bottom: 30px;
+
+  h1 {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+  }
+}
+
+.consent-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+
+  .authorization-section {
+    margin-bottom: 30px;
+
+    .authorization-text {
+      font-size: 16px;
+      line-height: 1.5;
+      color: #333;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+    }
+  }
+
+  .signature-section {
+    margin-bottom: 30px;
+
+    .signature-display {
+      text-align: center;
+
+      .signature-line {
+        border-bottom: 2px solid #333;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+        min-height: 60px;
+        display: flex;
+        align-items: end;
+        justify-content: center;
+
+        .signature-image {
+          max-width: 200px;
+          max-height: 50px;
+          object-fit: contain;
+        }
+
+        .signature-text {
+          font-size: 24px;
+          font-family: cursive;
+          color: #333;
+          font-weight: bold;
+        }
+
+        .no-signature {
+          font-size: 16px;
+          color: #999;
+          font-style: italic;
+        }
+      }
+
+      .signature-label {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+      }
+    }
+  }
+
+  .options-section {
+    margin-bottom: 30px;
+
+    .option-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .option-icon {
+        font-size: 20px;
+        margin-right: 12px;
+        color: #20b2aa;
+      }
+
+      .option-label {
+        font-size: 16px;
+        color: #333;
+        flex: 1;
+      }
+
+      .status-enabled {
+        font-size: 20px;
+        color: #20b2aa;
+      }
+
+      .status-disabled {
+        font-size: 20px;
+        color: #ccc;
+      }
+    }
+  }
+
+  .validity-section {
+    margin-bottom: 30px;
+
+    .validity-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .validity-label {
+        font-size: 16px;
+        color: #666;
+        font-weight: 500;
+      }
+
+      .validity-value {
+        font-size: 16px;
+        color: #333;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .action-section {
+    .done-button {
+      --background: #20b2aa;
+      --border-radius: 25px;
+      height: 50px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+  }
+}
+
+.loading-section {
+  text-align: center;
+  padding: 40px 20px;
+
+  ion-spinner {
+    margin-bottom: 16px;
+  }
+
+  p {
+    color: #666;
+    font-size: 16px;
+    margin: 0;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+
+  .empty-icon {
+    font-size: 64px;
+    color: #ccc;
+    margin-bottom: 16px;
+  }
+
+  h3 {
+    font-size: 20px;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  p {
+    color: #666;
+    font-size: 16px;
+    margin: 0;
+  }
+}
+
+.letters-list {
+  margin-bottom: 20px;
+
+  h3 {
+    font-size: 18px;
+    color: #333;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .letter-item {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &.selected {
+      border: 2px solid #20b2aa;
+      box-shadow: 0 4px 12px rgba(32, 178, 170, 0.2);
+    }
+
+    .letter-preview {
+      .letter-text {
+        font-size: 14px;
+        color: #333;
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+
+      .letter-date {
+        font-size: 12px;
+        color: #666;
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+.custom-tab-bar {
+  --background: white;
+  --border: 1px solid #e0e0e0;
+
+  .tab-button {
+    --color: #999;
+    --color-selected: #20b2aa;
+
+    &.active {
+      --color: #20b2aa;
+    }
+  }
+}

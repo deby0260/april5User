@@ -1,0 +1,435 @@
+.scheduling-page { --background: #FFFDFD; }
+
+.page-container {
+  padding: 20px 16px 100px 16px;
+  min-height: calc(100vh - 60px);
+}
+
+.header-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+
+  .back-button {
+    --color: #129CAE;
+    margin-right: 16px;
+    --padding-start: 0;
+    --padding-end: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+
+    img {
+      width: 160px;
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+}
+
+.title-section {
+  text-align: center;
+  margin-bottom: 30px;
+
+  h1 {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+  }
+}
+
+.form-section {
+  .input-group {
+    margin-bottom: 24px;
+
+    .input-label {
+      display: block;
+      font-size: 16px;
+      font-weight: 500;
+      color: #000;
+      margin-bottom: 8px;
+    }
+
+    /* ---- SELECT (teal theme) ---- */
+    .family-select {
+      --background: #EAF7F8 !important;
+      --border-radius: 12px;
+      --border-width: 2px;
+      --border-color: #129CAE !important;
+      --padding-start: 16px;
+      --padding-end: 16px;
+      --color: #0f2d2f !important;
+      --placeholder-color: #4a6264 !important;
+      height: 50px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      font-weight: 600 !important;
+
+      .select-wrapper { background: transparent; color: #0f2d2f !important; }
+      .select-text { color: #0f2d2f !important; font-weight: 600 !important; font-size: 16px !important; }
+      .select-icon { color: #129CAE !important; }
+
+      &::part(text)       { color: #0f2d2f; font-weight: 600; }
+      &::part(placeholder){ color: #4a6264; }
+      &::part(icon)       { color: #129CAE; }
+      &::part(container)  { border-color: #129CAE; }
+    }
+
+    .date-info {
+      margin-bottom: 8px;
+
+      .info-chip {
+        --background: rgba(18, 156, 174, 0.10);
+        --color: #129CAE;
+        font-size: 12px;
+
+        ion-icon { margin-right: 4px; }
+      }
+    }
+
+    .days-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+
+      .day-button {
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 20px;
+        padding: 8px 16px;
+        font-size: 14px;
+        color: #000;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &.selected {
+          background: #129CAE;
+          border-color: #129CAE;
+          color: white;
+          font-weight: 800;
+        }
+        &:hover:not(.selected) {
+          border-color: #129CAE;
+          color: #129CAE;
+        }
+      }
+    }
+
+    .day-selection-note {
+      margin-top: 8px;
+
+      ion-note {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #666;
+
+        ion-icon { font-size: 14px; }
+      }
+    }
+
+    .date-button {
+      --background: white;
+      --border-radius: 12px;
+      --border-width: 2px;
+      --border-color: #e0e0e0;
+      --color: #000;
+      height: 50px;
+      width: 100%;
+      justify-content: flex-start;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+
+      ion-icon { margin-right: 12px; color: #666; }
+    }
+
+    .time-input-container {
+      display: flex;
+      align-items: center;
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 0 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+
+      .time-input {
+        --background: transparent;
+        --border-width: 0;
+        --padding-start: 0;
+        --padding-end: 0;
+        --color: #000;
+        flex: 1;
+        height: 50px;
+      }
+
+      .time-format {
+        color: #666;
+        font-size: 14px;
+        margin-left: 8px;
+      }
+    }
+  }
+
+  .action-section {
+    margin-top: 40px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+
+    .done-button {
+      --background: #129CAE;
+      --border-radius: 25px;
+      height: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      --color: white;
+      box-shadow: 0 4px 12px rgba(18,156,174,0.25);
+    }
+  }
+}
+
+.bottom-navigation {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #0e7ec9, #0056b3);
+  border-top: 1px solid #e0e0e0;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+
+  .nav-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 8px 0;
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+
+      ion-icon { font-size: 24px; margin-bottom: 4px; color: rgba(255, 255, 255, 0.7); }
+      span     { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+
+      &.active { ion-icon, span { color: white; } }
+      &:hover:not(.active):not(.panic-center) { ion-icon, span { color: white; } }
+
+      &.panic-center {
+        flex: 1.2;
+        .panic-button {
+          --background: #dc3545;
+          --background-activated: #c82333;
+          --color: white;
+          --box-shadow: none;
+          --border: none;
+          font-size: 14px;
+          font-weight: bold;
+          height: 40px;
+          width: 80px;
+          --border-radius: 20px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+          margin: 0;
+          padding: 0;
+
+          span { color: white; font-size: 12px; font-weight: bold; }
+        }
+      }
+    }
+  }
+}
+
+.permission-warning {
+  margin-bottom: 20px;
+  text-align: center;
+
+  ion-chip {
+    --background: rgba(255, 193, 7, 0.1);
+    --color: var(--ion-color-warning);
+  }
+}
+
+.selection-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  ion-button {
+    --border-color: #129CAE;
+    --color: #129CAE;
+    height: 32px;
+
+    &[disabled] {
+      --color: #ccc;
+      --border-color: #ccc;
+    }
+  }
+}
+
+.children-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  .child-selection-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &.selected {
+      border-color: #129CAE;
+      background: rgba(18,156,174,0.06);
+    }
+    &:hover { border-color: #129CAE; }
+
+    .child-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      ion-avatar { width: 40px; height: 40px; }
+
+      .child-icon {
+        font-size: 24px;
+        color: #666;
+        width: 40px; height: 40px;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f0f0; border-radius: 50%;
+      }
+
+      .child-details {
+        display: flex; flex-direction: column;
+
+        .child-name  { font-size: 16px; font-weight: 500; color: #000; margin-bottom: 2px; }
+        .child-grade { font-size: 14px; color: #666; }
+      }
+    }
+
+    ion-checkbox {
+      --color: #129CAE;
+      --color-checked: #129CAE;
+      --border-color: #129CAE;
+      --border-color-checked: #129CAE;
+    }
+  }
+}
+
+.selected-summary {
+  text-align: center;
+  padding: 8px;
+  background: rgba(18,156,174,0.10);
+  border-radius: 8px;
+
+  p {
+    margin: 0;
+    color: #129CAE;
+    font-weight: 500;
+    font-size: 14px;
+  }
+}
+
+.custom-datetime ion-datetime {
+  // Change calendar background to an even lighter teal
+  --background: #B2E6ED !important; // much lighter version of #129CAE
+  --background-rgb: 178,230,237 !important;
+
+  --header-background: #129CAE !important;
+  --header-color: #F7FAFC !important;
+
+  --ion-text-color: #129CAE !important;
+  --ion-text-color-rgb: 18,156,174 !important;
+  --ion-color-step-850: #129CAE !important;
+  --ion-color-step-900: #129CAE !important;
+  --ion-color-step-950: #129CAE !important;
+
+  --calendar-day-color: #129CAE !important;
+  --calendar-day-color-today: #129CAE !important;
+  --calendar-day-color-active: #F7FAFC !important;
+  --calendar-day-background-active: #38B2AC !important;
+  --calendar-day-background-today: #129CAE !important;
+
+  --calendar-day-color-disabled: #718096 !important;
+
+  --wheel-color: #129CAE !important;
+  --wheel-color-active: #38B2AC !important;
+
+  --button-color: #38B2AC !important;
+  --button-background: transparent !important;
+  --button-background-active: #129CAE !important;
+
+  --border-color: #129CAE !important;
+  --divider-color: #129CAE !important;
+}
+
+/* Make month/year and weekday text white for Ionic 7+ */
+.custom-datetime ion-datetime::part(month-year),
+.custom-datetime ion-datetime::part(weekday) {
+  color: #fff !important;
+}
+
+/* 2) Shadow parts (Ion 7+) — visible, bold day pills */
+.custom-datetime ion-datetime::part(calendar-day) {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  font-size: 18px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: .2px;
+  color: #F7FAFC !important;
+  opacity: 1 !important;
+  background: #129CAE !important;
+}
+.custom-datetime ion-datetime::part(calendar-day-active) {
+  background: #38B2AC !important;
+  color: #129CAE !important;
+  box-shadow: inset 0 0 0 2px #117a8b;
+  opacity: 1 !important;
+}
+.custom-datetime ion-datetime::part(calendar-day-today) {
+  background: #117a8b !important;
+  color: #F7FAFC !important;
+  box-shadow: inset 0 0 0 2px #38B2AC;
+  opacity: 1 !important;
+}
+.custom-datetime ion-datetime::part(calendar-day-disabled) {
+  color: #718096 !important;
+  opacity: .85 !important;
+}
+
+/* 3) Fallback for older Ionic builds */
+.scheduling-page ion-datetime {
+  background: #129CAE !important;
+
+  .calendar-header,
+  .datetime-header,
+  .calendar-month-year,
+  .datetime-year,
+  .datetime-month,
+  .calendar-weekday,
+  ::part(weekday) {
+    color: #fff !important;
+  }
+}
+
+/* Keep trigger full width */
+.custom-datetime { width: 100%; .date-button { width: 100%; } }

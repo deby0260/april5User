@@ -1,0 +1,84 @@
+<ion-content [fullscreen]="true" class="qr-code-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <ion-button fill="clear" class="back-button" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <div class="logo-container">
+        <div class="logo">
+          <img src="assets/logo2.png" alt="FetchSafe logo" />
+        </div>
+      </div>
+    </div>
+
+    <div class="qr-content">
+      <div class="title-section">
+        <h1 class="main-title">Secure QR Code</h1>
+        <p class="subtitle">Authorized Guardian/Fetcher</p>
+
+        <div *ngIf="isOfflineMode()" class="offline-indicator">
+          <ion-icon name="cloud-offline-outline"></ion-icon>
+          <span>Offline Mode - Cached QR Code</span>
+        </div>
+      </div>
+
+      <div class="qr-display-container">
+        <div *ngIf="qrCodeImageUrl && !isLoading" class="qr-image-wrapper">
+          <img
+            [src]="qrCodeImageUrl"
+            alt="Secure QR Code for {{ currentUser?.fullName }}"
+            class="qr-code-image"
+            (error)="onQRImageError($event)" />
+        </div>
+
+        <div *ngIf="isLoading" class="qr-loading-state">
+          <ion-spinner name="crescent" color="primary"></ion-spinner>
+          <p>Generating secure QR code...</p>
+        </div>
+
+        <div *ngIf="!qrCodeImageUrl && !isLoading && qrPattern.length > 0" class="qr-pattern-fallback">
+          <div class="qr-grid">
+            <div class="corner-square top-left"></div>
+            <div class="corner-square top-right"></div>
+            <div class="corner-square bottom-left"></div>
+            <div class="qr-dots">
+              <div class="dot" *ngFor="let dot of qrPattern" [class.filled]="dot"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="instruction-section">
+        <p class="instruction-text">Show this QR code at pickup</p>
+        <div class="qr-info">
+          <h3>This QR Code Contains:</h3>
+          <ul>
+            <li>✓ Your family name and information</li>
+            <li>✓ Your name and contact details</li>
+            <li>✓ Your profile picture</li>
+            <li>✓ Children’s names and photos</li>
+            <li>✓ Family members’ information</li>
+          </ul>
+          <p class="qr-note">
+            <strong>Note:</strong> When scanned, this redirects to
+            <strong>https://fetchsafe2.web.app</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div class="refresh-section">
+        <ion-button
+          expand="block"
+          class="refresh-btn"
+          (click)="refreshCode()"
+          [disabled]="isLoading">
+          <span *ngIf="!isLoading">Refresh Code</span>
+          <span *ngIf="isLoading">Generating...</span>
+        </ion-button>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+<app-bottom-navigation></app-bottom-navigation>

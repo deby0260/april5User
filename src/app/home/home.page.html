@@ -1,0 +1,153 @@
+<ion-content [fullscreen]="true" class="home-page" [scrollY]="true">
+  <div class="home-container">
+    <div class="header-section">
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+
+      <div class="notification-icon" (click)="navigateToNotifications()">
+        <ion-icon name="notifications-outline"></ion-icon>
+      </div>
+    </div>
+
+    <div class="weather-section" *ngIf="weatherData">
+      <div class="weather-info">
+        <ion-icon [name]="getWeatherIcon()" class="weather-icon"></ion-icon>
+        <div class="weather-text">
+          <span class="weather-condition">{{ weatherData.weather[0].main }} Today in {{ weatherData.name }}.</span>
+          <span class="weather-details">{{ weatherData.main.temp }}°C - {{ weatherData.weather[0].description }}</span>
+          <span class="weather-reminder">{{ getWeatherReminder() }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="welcome-section">
+      <h1 class="welcome-title">Welcome, {{ (currentUser?.fullName?.split(' ') || ['Mae'])[0] }}!</h1>
+    </div>
+
+    <div class="action-cards">
+      <div class="card-row">
+        <div class="action-card analytics"
+             [class.disabled]="!userRole?.canAccessAnalytics"
+             (click)="navigateToAnalytics()">
+          <ion-icon name="bar-chart" class="card-icon"></ion-icon>
+          <div class="card-content">
+            <h3>View Analytics</h3>
+            <p>Monitor Daily Analytics</p>
+            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessAnalytics">
+              (Requires Parent Role)
+            </span>
+          </div>
+          <div class="lock-overlay" *ngIf="!userRole?.canAccessAnalytics">
+            <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
+          </div>
+        </div>
+
+        <div class="action-card consent"
+             [class.disabled]="!userRole?.canAccessConsentLetter"
+             (click)="navigateToDigitalConsent()">
+          <ion-icon name="document-text" class="card-icon"></ion-icon>
+          <div class="card-content">
+            <h3>Digital Consent</h3>
+            <p>Create Digital Consent Letter</p>
+            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessConsentLetter">
+              (Requires Parent Role)
+            </span>
+          </div>
+          <div class="lock-overlay" *ngIf="!userRole?.canAccessConsentLetter">
+            <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-row">
+        <div class="action-card schedule"
+             [class.disabled]="!userRole?.canAccessScheduling"
+             (click)="navigateToSetSchedule()">
+          <ion-icon name="calendar" class="card-icon"></ion-icon>
+          <div class="card-content">
+            <h3>Set Schedule</h3>
+            <p>Schedule pickup times</p>
+            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessScheduling">
+              (Requires Parent Role)
+            </span>
+          </div>
+          <div class="lock-overlay" *ngIf="!userRole?.canAccessScheduling">
+            <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
+          </div>
+        </div>
+
+        <div class="action-card qr-code"
+             [class.disabled]="!userHasFamily"
+             (click)="navigateToDisplayQR()">
+          <ion-icon name="qr-code" class="card-icon"></ion-icon>
+          <div class="card-content">
+            <h3>Display QR Code</h3>
+            <p>Show QR code for pickup</p>
+          </div>
+          <div class="lock-overlay" *ngIf="!userHasFamily">
+            <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="consent-link-section">
+      <a (click)="navigateToConsentLetter()"
+         class="consent-link"
+         [class.disabled-link]="!userHasFamily">
+        Show Consent Letter
+        <ion-icon name="lock-closed" class="small-lock" *ngIf="!userHasFamily"></ion-icon>
+      </a>
+    </div>
+
+    <div class="upcoming-section">
+      <div class="section-header">
+        <h2>Upcoming Pickups</h2>
+        <a (click)="navigateToViewSchedule()"
+           class="view-schedule-link"
+           [class.disabled-link]="!userHasFamily">
+          View Schedule
+          <ion-icon name="lock-closed" class="small-lock" *ngIf="!userHasFamily"></ion-icon>
+        </a>
+      </div>
+
+      <div class="upcoming-pickup-section" *ngIf="getNextPickup()">
+        <div class="pickup-card">
+          <div class="pickup-header">
+            <ion-icon name="car" class="pickup-icon"></ion-icon>
+            <h3>Next Pickup</h3>
+          </div>
+          <div class="pickup-details">
+            <div class="pickup-info">
+              <div class="pickup-date">{{ formatPickupDate(getNextPickup().date) }}</div>
+              <div class="pickup-time">{{ getNextPickup().time }}</div>
+              <div class="pickup-day">{{ getNextPickup().days }}</div>
+            </div>
+            <div class="pickup-child">
+              <div class="child-name">{{ getNextPickup().childName }}</div>
+              <div class="child-grade">{{ getNextPickup().childGrade }}</div>
+            </div>
+            <div class="pickup-fetcher">
+              <div class="fetcher-label">Fetcher:</div>
+              <div class="fetcher-name">{{ getNextPickup().fetcherName }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="no-pickups" *ngIf="!getNextPickup() && upcomingPickups.length === 0">
+        <div class="no-pickups-card">
+          <ion-icon name="calendar-outline" class="no-pickups-icon"></ion-icon>
+          <h3>No Upcoming Pickups</h3>
+          <p>No pickup schedules have been created for your family yet.</p>
+          <ion-button fill="outline" (click)="navigateTo('/scheduling')">
+            Create Schedule
+          </ion-button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <app-bottom-navigation></app-bottom-navigation>
+</ion-content>

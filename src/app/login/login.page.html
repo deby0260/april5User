@@ -1,0 +1,43 @@
+<ion-content [fullscreen]="true" class="login-page">
+  <div class="login-container">
+    <div class="logo-section">
+      <div class="logo">
+        <img src="assets/logo.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="input-container">
+        <ion-input
+          type="email"
+          placeholder="Email"
+          [(ngModel)]="email"
+          class="custom-input"
+          fill="solid">
+        </ion-input>
+      </div>
+
+      <div class="input-container">
+        <ion-input
+          type="password"
+          placeholder="Password"
+          [(ngModel)]="password"
+          class="custom-input"
+          fill="solid">
+        </ion-input>
+      </div>
+
+      <div class="forgot-password">
+        <a href="#" (click)="goToForgotPassword()" class="forgot-link">Forgot Password?</a>
+      </div>
+
+      <ion-button expand="block" class="login-button" (click)="login()">
+        Login
+      </ion-button>
+
+      <ion-button expand="block" fill="outline" class="register-button" (click)="goToRegister()">
+        Register
+      </ion-button>
+    </div>
+  </div>
+</ion-content>

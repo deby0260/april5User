@@ -1,0 +1,130 @@
+<ion-content [fullscreen]="true" class="scheduling-page" [scrollY]="true">
+  <div class="page-container">
+    <div class="header-section">
+      <ion-button fill="clear" class="back-button" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <div class="logo">
+        <img src="assets/logo2.png" alt="FetchSafe logo" />
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h1>Set Schedule</h1>
+    </div>
+
+    <div class="form-section">
+      <div *ngIf="!canManageSchedule" class="permission-warning">
+        <ion-chip color="warning">
+          <ion-icon name="lock-closed"></ion-icon>
+          <ion-label>Only owners and parents can create schedules</ion-label>
+        </ion-chip>
+      </div>
+
+      <div class="input-group" *ngIf="canManageSchedule">
+        <label class="input-label">Fetcher&apos;s Name</label>
+        <ion-select
+          placeholder="Select Family Members"
+          [value]="scheduleData.fetcherName ? getSelectedMember() : null"
+          (ionChange)="onFetcherSelected($event)"
+          class="family-select"
+          interface="popover">
+          <ion-select-option
+            *ngFor="let member of getAvailableFetchers()"
+            [value]="member">
+            {{ member.name }} ({{ member.role | titlecase }})
+          </ion-select-option>
+        </ion-select>
+      </div>
+
+      <div class="input-group" *ngIf="canManageSchedule">
+        <label class="input-label">Select Day (Choose One)</label>
+        <div class="days-selector">
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Monday')" (click)="toggleDay('Monday')">Mon</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Tuesday')" (click)="toggleDay('Tuesday')">Tue</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Wednesday')" (click)="toggleDay('Wednesday')">Wed</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Thursday')" (click)="toggleDay('Thursday')">Thu</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Friday')" (click)="toggleDay('Friday')">Fri</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Saturday')" (click)="toggleDay('Saturday')">Sat</div>
+          <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Sunday')" (click)="toggleDay('Sunday')">Sun</div>
+        </div>
+        <div class="day-selection-note">
+          <ion-note color="medium">
+            <ion-icon name="information-circle-outline"></ion-icon>
+            Select only one day. Calendar will show only dates for that day.
+          </ion-note>
+        </div>
+      </div>
+
+      <div class="input-group" *ngIf="canManageSchedule">
+        <label class="input-label">Date</label>
+        <div class="date-info" *ngIf="scheduleData.selectedDays.length > 0">
+          <ion-chip color="primary" class="info-chip">
+            <ion-icon name="information-circle"></ion-icon>
+            <ion-label>Only {{ scheduleData.selectedDays[0] }} dates are available</ion-label>
+          </ion-chip>
+        </div>
+        <ion-datetime
+          presentation="date"
+          [min]="minDate"
+          [max]="maxDate"
+          [isDateEnabled]="isDateEnabled"
+          [(ngModel)]="scheduleData.selectedDate"
+          (ionChange)="onDateChange($event)"
+          class="custom-datetime">
+          <ion-button fill="outline" class="date-button" slot="trigger">
+            <ion-icon name="calendar-outline" slot="start"></ion-icon>
+            {{ getFormattedDate() }}
+          </ion-button>
+        </ion-datetime>
+      </div>
+
+      <div class="input-group" *ngIf="canManageSchedule">
+        <label class="input-label">Time</label>
+        <div class="time-input-container">
+          <ion-input type="time" [(ngModel)]="scheduleData.selectedTime" class="time-input"></ion-input>
+          <span class="time-format">AM/PM</span>
+        </div>
+      </div>
+
+      <div class="input-group" *ngIf="canManageSchedule && children.length > 0">
+        <label class="input-label">Select Children to be picked up</label>
+
+        <div class="selection-controls">
+          <ion-button fill="outline" size="small" (click)="selectAllChildren()" [disabled]="scheduleData.selectedChildren.length === children.length">Select All</ion-button>
+          <ion-button fill="outline" size="small" (click)="clearAllChildren()" [disabled]="scheduleData.selectedChildren.length === 0">Clear All</ion-button>
+        </div>
+
+        <div class="children-selection-list">
+          <div
+            *ngFor="let child of children"
+            class="child-selection-item"
+            [class.selected]="isChildSelected(child)"
+            (click)="toggleChildSelection(child)">
+            <div class="child-info">
+              <ion-avatar *ngIf="child.profilePicture">
+                <img [src]="child.profilePicture" [alt]="child.name">
+              </ion-avatar>
+              <ion-icon *ngIf="!child.profilePicture" name="person" class="child-icon"></ion-icon>
+              <div class="child-details">
+                <span class="child-name">{{ child.name }}</span>
+                <span class="child-grade">{{ child.grade }}</span>
+              </div>
+            </div>
+            <ion-checkbox [checked]="isChildSelected(child)" (ionChange)="toggleChildSelection(child)"></ion-checkbox>
+          </div>
+        </div>
+
+        <div class="selected-summary" *ngIf="scheduleData.selectedChildren.length > 0">
+          <p>Selected: {{ scheduleData.selectedChildren.length }} of {{ children.length }} children</p>
+        </div>
+      </div>
+
+      <div class="action-section" *ngIf="canManageSchedule">
+        <ion-button expand="block" class="done-button" (click)="saveSchedule()">Done</ion-button>
+      </div>
+    </div>
+  </div>
+</ion-content>
+<app-bottom-navigation></app-bottom-navigation>

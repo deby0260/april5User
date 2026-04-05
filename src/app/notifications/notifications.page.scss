@@ -1,0 +1,232 @@
+.notifications-page {
+  --background: #FFFDFD;
+}
+
+.page-container {
+  padding: 20px 16px 100px 16px; // Extra bottom padding for navigation
+  min-height: calc(100vh - 60px);
+}
+
+.loading-section {
+  text-align: center;
+  padding: 40px 20px;
+
+  ion-spinner { margin-bottom: 16px; }
+
+  p {
+    color: #666;
+    font-size: 16px;
+    margin: 0;
+  }
+}
+
+.header-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+
+  .back-button {
+    --color: #333;
+    margin-right: 16px;
+    --padding-start: 0;
+    --padding-end: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+
+    /* image-only logo */
+    img {
+      width: 160px;
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+}
+
+.title-section {
+  text-align: center;
+  margin-bottom: 30px;
+
+  h1 {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+  }
+}
+
+.notifications-list {
+  .notification-item {
+    display: flex;
+    align-items: flex-start;
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    position: relative;
+
+    &.unread {
+      background: #f8fffe;
+      border-left: 4px solid #20b2aa;
+    }
+
+    &.clickable {
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+
+      &:hover { background: #f0f9ff; }
+      &:active { background: #e0f2fe; }
+    }
+
+    .notification-icon {
+      margin-right: 16px;
+      margin-top: 4px;
+
+      ion-icon {
+        font-size: 24px;
+
+        &.schedule     { color: #20b2aa; }
+        &.request,
+        &.join_request { color: #ff9500; }
+        &.success,
+        &.join_approved{ color: #34c759; }
+        &.join_denied  { color: #ff3b30; }
+        &.password_change_required { color: #ff9500; }
+      }
+    }
+
+    .notification-content {
+      flex: 1;
+
+      .notification-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+
+        .notification-title {
+          font-size: 16px;
+          font-weight: bold;
+          color: #333;
+          margin: 0;
+        }
+
+        .notification-time {
+          font-size: 12px;
+          color: #999;
+          white-space: nowrap;
+          margin-left: 12px;
+        }
+      }
+
+      .notification-message {
+        font-size: 14px;
+        color: #666;
+        line-height: 1.4;
+        margin: 0;
+      }
+
+      .action-hint {
+        font-size: 12px;
+        color: #20b2aa;
+        font-style: italic;
+        margin: 4px 0 0 0;
+
+        &.password-hint {
+          color: #ff9500;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 8px;
+
+          ion-icon {
+            font-size: 14px;
+          }
+        }
+      }
+
+      .password-change-action {
+        margin-top: 12px;
+
+        ion-button {
+          --padding-top: 8px;
+          --padding-bottom: 8px;
+          --padding-start: 12px;
+          --padding-end: 12px;
+          --background: linear-gradient(135deg, #ff9500 0%, #ff7f00 100%);
+          --color: white;
+          --border-radius: 6px;
+          font-size: 14px;
+          font-weight: 600;
+        }
+      }
+
+      .password-completed {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        color: #34c759;
+        font-size: 13px;
+        font-weight: 500;
+
+        ion-icon {
+          font-size: 18px;
+        }
+      }
+    }
+
+    .read-indicator {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+
+      .unread-dot {
+        width: 8px;
+        height: 8px;
+        background: #20b2aa;
+        border-radius: 50%;
+      }
+    }
+
+    .action-arrow {
+      margin-left: 12px;
+      color: #ccc;
+
+      ion-icon { font-size: 20px; }
+    }
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+
+    .empty-icon { font-size: 64px; color: #ccc; margin-bottom: 20px; }
+
+    h3 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 8px 0;
+    }
+
+    p { font-size: 16px; color: #666; margin: 0; }
+  }
+}
+
+.custom-tab-bar {
+  --background: white;
+  --border: 1px solid #e0e0e0;
+
+  .tab-button {
+    --color: #999;
+    --color-selected: #20b2aa;
+
+    &.active { --color: #20b2aa; }
+  }
+}

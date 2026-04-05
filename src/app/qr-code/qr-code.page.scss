@@ -1,0 +1,315 @@
+.qr-code-page {
+  --background: #FFFDFD;
+}
+
+.page-container {
+  padding: 20px 20px 0 20px;
+  min-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  background: #FFFDFD;
+}
+
+.header-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  position: relative;
+
+  .back-button {
+    --color: #129CAE;
+    --padding-start: 0;
+    --padding-end: 0;
+    position: absolute;
+    left: 0;
+    z-index: 10;
+  }
+
+  .logo-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+
+    .logo {
+      display: flex;
+      align-items: center;
+
+      img {
+        width: 160px;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    }
+  }
+}
+
+.qr-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 20px;
+
+  .title-section {
+    margin-bottom: 40px;
+
+    .main-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 8px 0;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: #666;
+      margin: 0;
+      font-weight: 400;
+    }
+
+    .offline-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+      padding: 8px 16px;
+      background: rgba(255, 193, 7, 0.1);
+      border: 1px solid #ffc107;
+      border-radius: 20px;
+      color: #856404;
+      font-size: 14px;
+      font-weight: 500;
+
+      ion-icon {
+        margin-right: 8px;
+        font-size: 18px;
+      }
+    }
+  }
+
+  .qr-display-container {
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    // Real QR Code Image
+    .qr-image-wrapper {
+      .qr-code-image {
+        width: 250px;
+        height: 250px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border: 3px solid #f0f0f0;
+      }
+    }
+
+    // Loading State
+    .qr-loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 250px;
+      height: 250px;
+      border: 3px solid #f0f0f0;
+      border-radius: 12px;
+      background: #fafafa;
+
+      ion-spinner {
+        margin-bottom: 16px;
+        --color: #20b2aa;
+        transform: scale(1.5);
+      }
+
+      p {
+        font-size: 14px;
+        color: #666;
+        text-align: center;
+        margin: 0;
+        font-weight: 500;
+      }
+    }
+
+    // Fallback Pattern
+    .qr-pattern-fallback {
+      width: 250px;
+      height: 250px;
+      position: relative;
+      border: 3px solid #f0f0f0;
+      border-radius: 12px;
+      background: white;
+      padding: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+
+      .qr-grid {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: repeat(21, 1fr);
+        grid-template-rows: repeat(21, 1fr);
+        gap: 1px;
+
+        .dot {
+          background: white;
+
+          &.filled {
+            background: #333;
+          }
+        }
+      }
+
+      // Corner squares overlay
+      .corner-square {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        border: 5px solid #333;
+
+        &::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 16px;
+          height: 16px;
+          background: #333;
+        }
+
+        &.top-left {
+          top: 15px;
+          left: 15px;
+        }
+
+        &.top-right {
+          top: 15px;
+          right: 15px;
+        }
+
+        &.bottom-left {
+          bottom: 15px;
+          left: 15px;
+        }
+      }
+    }
+  }
+
+  .instruction-section {
+    margin-bottom: 40px;
+
+    .instruction-text {
+      font-size: 16px;
+      color: #666;
+      margin: 0 0 20px 0;
+      font-weight: 400;
+    }
+
+    .qr-info {
+      background: #f8f9fa;
+      border-radius: 15px;
+      padding: 20px;
+      border-left: 4px solid #20b2aa;
+      margin-top: 20px;
+
+      h3 {
+        color: #333;
+        font-size: 18px;
+        margin-bottom: 15px;
+        font-weight: 600;
+      }
+
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 15px 0;
+
+        li {
+          padding: 8px 0;
+          color: #555;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+
+          &:before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #20b2aa;
+            border-radius: 50%;
+            margin-right: 10px;
+            flex-shrink: 0;
+          }
+        }
+      }
+
+      .qr-note {
+        background: #e3f2fd;
+        padding: 15px;
+        border-radius: 10px;
+        font-size: 13px;
+        color: #1565c0;
+        margin: 15px 0 0 0;
+        line-height: 1.4;
+
+        strong {
+          color: #0d47a1;
+        }
+      }
+    }
+  }
+
+  .refresh-section {
+    margin-bottom: 30px;
+
+    .refresh-btn {
+      --background: #20b2aa;
+      --background-hover: #1a9a94;
+      --background-activated: #1a9a94;
+      --border-radius: 25px;
+      --color: white;
+      height: 50px;
+      font-size: 16px;
+      font-weight: 600;
+      width: 200px;
+      margin: 0 auto 15px auto;
+      text-transform: none;
+      letter-spacing: 0.5px;
+
+      &[disabled] {
+        --background: #cccccc;
+        --color: #999999;
+      }
+    }
+
+    .test-btn {
+      --background: transparent;
+      --background-hover: rgba(32, 178, 170, 0.1);
+      --background-activated: rgba(32, 178, 170, 0.2);
+      --border-radius: 25px;
+      --color: #20b2aa;
+      --border-color: #20b2aa;
+      --border-width: 2px;
+      height: 45px;
+      font-size: 14px;
+      font-weight: 500;
+      width: 180px;
+      margin: 0 auto;
+      text-transform: none;
+      letter-spacing: 0.3px;
+
+      &[disabled] {
+        --background: transparent;
+        --color: #cccccc;
+        --border-color: #cccccc;
+      }
+    }
+  }
+}
+
+// Remove old tab bar styles since we're using app-bottom-navigation component

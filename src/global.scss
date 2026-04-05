@@ -1,0 +1,375 @@
+/*
+ * App Global CSS
+ * ----------------------------------------------------------------------------
+ * Put style rules here that you want to apply globally. These styles are for
+ * the entire app and not just one component. Additionally, this file can be
+ * used as an entry point to import other CSS/Sass files to be included in the
+ * output CSS.
+ * For more information on global stylesheets, visit the documentation:
+ * https://ionicframework.com/docs/layout/global-stylesheets
+ */
+
+/* Core CSS required for Ionic components to work properly */
+@import "@ionic/angular/css/core.css";
+
+/* Basic CSS for apps built with Ionic */
+@import "@ionic/angular/css/normalize.css";
+@import "@ionic/angular/css/structure.css";
+@import "@ionic/angular/css/typography.css";
+@import "@ionic/angular/css/display.css";
+
+/* Optional CSS utils that can be commented out */
+@import "@ionic/angular/css/padding.css";
+@import "@ionic/angular/css/float-elements.css";
+@import "@ionic/angular/css/text-alignment.css";
+@import "@ionic/angular/css/text-transformation.css";
+@import "@ionic/angular/css/flex-utils.css";
+
+/**
+ * Ionic Dark Mode
+ * -----------------------------------------------------
+ * For more info, please see:
+ * https://ionicframework.com/docs/theming/dark-mode
+ */
+
+/* @import "@ionic/angular/css/palettes/dark.always.css"; */
+/* @import "@ionic/angular/css/palettes/dark.class.css"; */
+@import "@ionic/angular/css/palettes/dark.system.css";
+
+/* Custom Global Styles */
+
+// Fix ion-select text visibility with high contrast
+ion-select {
+  --color: #000000 !important;
+  --background: #ffffff !important;
+  --border-color: #333333 !important;
+
+  .select-text {
+    color: #000000 !important;
+    font-weight: 500 !important;
+  }
+
+  .select-icon {
+    color: #333333 !important;
+  }
+}
+
+// Fix ion-select-option text visibility with sky blue theme
+ion-select-option {
+  --color: #000000 !important;
+  --background: #B0E0E6 !important;  // Powder blue background
+  font-weight: 600 !important;
+  font-size: 16px !important;
+
+  &.select-option-selected {
+    --background: #87CEEB !important;  // Sky blue for selected
+    --color: #000000 !important;
+    font-weight: bold !important;
+  }
+}
+
+// Fix ion-popover for select options with sky blue theme
+ion-popover {
+  --background: #B0E0E6 !important;  // Powder blue background
+
+  ion-list {
+    background: #B0E0E6 !important;
+  }
+
+  ion-item {
+    --background: #B0E0E6 !important;
+    --color: #000000 !important;
+    font-weight: 600 !important;
+
+    &.item-selected {
+      --background: #87CEEB !important;  // Sky blue for selected
+      --color: #000000 !important;
+      font-weight: bold !important;
+    }
+  }
+}
+
+// Custom datetime styling with sky blue background for maximum visibility
+ion-datetime {
+  // Calendar background - SKY BLUE
+  --background: #87CEEB !important;
+  --background-rgb: 135, 206, 235 !important;
+
+  // Header styling
+  --header-background: #4682B4 !important;
+  --header-color: #ffffff !important;
+
+  // Calendar day styling - BLACK TEXT ON SKY BLUE
+  --calendar-day-color: #000000 !important;
+  --calendar-day-color-active: #ffffff !important;
+  --calendar-day-background-active: #1E90FF !important;
+  --calendar-day-background-active-rgb: 30, 144, 255 !important;
+
+  // Today styling
+  --calendar-day-color-today: #000080 !important;
+  --calendar-day-background-today: #B0E0E6 !important;
+
+  // Disabled day styling
+  --calendar-day-color-disabled: #696969 !important;
+
+  // Month/year picker - BLACK TEXT
+  --wheel-color: #000000 !important;
+  --wheel-color-active: #1E90FF !important;
+
+  // Buttons
+  --button-color: #1E90FF !important;
+  --button-background: transparent !important;
+  --button-background-active: #B0E0E6 !important;
+  --button-background-focused: #B0E0E6 !important;
+
+  // Border and dividers
+  --border-color: #4682B4 !important;
+  --divider-color: #4682B4 !important;
+}
+
+// Force calendar text to be visible everywhere with sky blue theme
+.datetime-popover,
+.datetime-modal {
+  --background: #87CEEB !important;
+
+  .calendar-day {
+    color: #000000 !important;
+    font-weight: 700 !important;
+    font-size: 16px !important;
+
+    &.calendar-day-active {
+      background: #1E90FF !important;
+      color: #ffffff !important;
+      font-weight: bold !important;
+    }
+
+    &.calendar-day-today {
+      color: #000080 !important;
+      background: #B0E0E6 !important;
+      font-weight: bold !important;
+    }
+
+    &.calendar-day-disabled {
+      color: #696969 !important;
+      opacity: 0.6 !important;
+    }
+  }
+
+  .calendar-month-year,
+  .datetime-header,
+  .datetime-year,
+  .datetime-month {
+    color: #000000 !important;
+    font-weight: 700 !important;
+    font-size: 18px !important;
+  }
+
+  .calendar-header {
+    background: #4682B4 !important;
+    color: #ffffff !important;
+  }
+
+  .datetime-button {
+    color: #1E90FF !important;
+    font-weight: 600 !important;
+  }
+}
+
+/* Ensure bottom navigation is always clickable and on top */
+app-bottom-navigation {
+  position: relative;
+  z-index: 10000 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure panic button is always clickable */
+.panic-button {
+  pointer-events: auto !important;
+  z-index: 10001 !important;
+  position: relative !important;
+}
+
+/* Prevent any overlays from blocking the bottom navigation */
+ion-modal, ion-popover, ion-alert, ion-loading, ion-toast {
+  z-index: 9998 !important;
+}
+
+/* Ensure ion-content doesn't overlap bottom navigation */
+ion-content {
+  --padding-bottom: 80px;
+}
+
+/* ====================================
+   PANIC ALERT MODAL STYLING
+   ==================================== */
+
+/* Enhanced Panic Alert Modal */
+.panic-alert-modal {
+  --backdrop-opacity: 0.8 !important;
+  --width: 90% !important;
+  --max-width: 450px !important;
+  --border-radius: 16px !important;
+  --background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+  --ion-text-color: #ffffff !important;
+
+  .alert-head {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 24px 20px 8px !important;
+    animation: pulse-alert-head 1.5s ease-in-out infinite;
+
+    h2 {
+      color: #ffffff !important;
+      font-size: 22px !important;
+      font-weight: 900 !important;
+      margin: 0 !important;
+      letter-spacing: 1px !important;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .alert-sub-header {
+    color: #ff6b6b !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    padding: 8px 20px 0 !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .alert-message {
+    color: #e9ecef !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    padding: 16px 20px 20px !important;
+    text-align: center !important;
+    opacity: 0.95 !important;
+
+    strong {
+      color: #ffc107 !important;
+      font-weight: bold !important;
+    }
+  }
+
+  .alert-button-group {
+    display: flex !important;
+    gap: 12px !important;
+    padding: 16px 20px 20px !important;
+    flex-direction: row;
+  }
+
+  .alert-button {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+    font-weight: bold !important;
+    letter-spacing: 1px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    height: 48px !important;
+    line-height: 48px !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    text-transform: uppercase !important;
+    text-align: center !important;
+    padding: 0 12px !important;
+
+    span {
+      width: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      height: 100% !important;
+      line-height: 1.2 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      text-align: center !important;
+    }
+
+    &:active {
+      transform: scale(0.95) !important;
+    }
+  }
+}
+
+/* Panic Cancel Button */
+.panic-cancel-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 48px !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+  }
+}
+
+/* Panic Send Button - Super Urgent */
+.panic-send-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 48px !important;
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 900 !important;
+  box-shadow: 0 4px 20px rgba(220, 53, 69, 0.5), 0 0 20px rgba(220, 53, 69, 0.3) !important;
+  animation: pulse-urgent-btn 1s ease-in-out infinite;
+
+  &:active {
+    box-shadow: 0 6px 30px rgba(220, 53, 69, 0.7), 0 0 30px rgba(220, 53, 69, 0.5) !important;
+  }
+}
+
+/* Restricted Alert Modal */
+.panic-alert-restricted {
+  --backdrop-opacity: 0.8 !important;
+  --width: 90% !important;
+  --max-width: 400px !important;
+  --border-radius: 16px !important;
+  --background: linear-gradient(135deg, #2d3436 0%, #1e272e 100%) !important;
+  --ion-text-color: #ffffff !important;
+
+  .alert-head {
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%) !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 20px !important;
+
+    h2 {
+      color: #ffffff !important;
+      font-size: 20px !important;
+      font-weight: bold !important;
+      margin: 0 !important;
+    }
+  }
+
+  .alert-message {
+    color: #e9ecef !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    padding: 20px !important;
+    text-align: center !important;
+  }
+}
+
+@keyframes pulse-alert-head {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+  }
+}
+
+@keyframes pulse-urgent-btn {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(220, 53, 69, 0.5), 0 0 20px rgba(220, 53, 69, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 25px rgba(220, 53, 69, 0.7), 0 0 25px rgba(220, 53, 69, 0.5);
+  }
+}
