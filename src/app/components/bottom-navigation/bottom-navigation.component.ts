@@ -1,8 +1,10 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { FamilyService } from '../../services/family.service';
 import { PanicService } from '../../services/panic.service';
 import { AuthService } from '../../services/auth';
+import { Subject } from 'rxjs';
+import { filter, takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-bottom-navigation',
@@ -13,6 +15,7 @@ import { AuthService } from '../../services/auth';
 export class BottomNavigationComponent implements OnInit, OnDestroy {
   userHasFamily: boolean = false;
   panicState: 'idle' | 'pressing' = 'idle';
+  private destroy$ = new Subject<void>();
 
   constructor(
     private router: Router,
@@ -22,14 +25,40 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
   ) { }
 
   async ngOnInit() {
-    await this.checkUserFamilyStatus();
+    const cached = this.familyService.getCachedUserHasFamily();
+    if (cached !== null) {
+      this.userHasFamily = cached;
+    }
+
+    this.familyService.userHasFamily$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((v) => {
+        if (v !== null) {
+          this.userHasFamily = v;
+        }
+      });
+
+    void this.checkUserFamilyStatus();
+
+    // Keep nav state consistent across route changes.
+    this.router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        void this.checkUserFamilyStatus();
+      });
   }
 
   async checkUserFamilyStatus() {
     try {
       const currentUser = this.authService.getCurrentUser();
       if (currentUser) {
-        this.userHasFamily = await this.familyService.checkUserHasFamily();
+        // Refresh cached family status in the background (avoids UI flicker).
+        await this.familyService.checkUserHasFamily();
+      } else {
+        this.userHasFamily = false;
       }
     } catch (error) {
       console.error('Error checking family status:', error);
@@ -122,10 +151,12 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Cleanup if needed
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   isCurrentRoute(route: string): boolean {
-    return this.router.url === route;
+    const current = (this.router.url || '').split('?')[0];
+    return current === route;
   }
 }

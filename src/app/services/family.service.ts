@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, query, where, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, deleteDoc, writeBatch } from '@angular/fire/firestore';
 import { AuthService } from './auth';
+import { BehaviorSubject } from 'rxjs';
 
 export interface FamilyMember {
   id: string;
@@ -25,16 +26,37 @@ export interface Family {
   providedIn: 'root'
 })
 export class FamilyService {
+  private userHasFamilySubject = new BehaviorSubject<boolean | null>(null);
+  userHasFamily$ = this.userHasFamilySubject.asObservable();
 
   constructor(
     private firestore: Firestore,
     private authService: AuthService
   ) { }
 
+  private cacheKey(uid: string): string {
+    return `userHasFamily:${uid}`;
+  }
+
+  getCachedUserHasFamily(): boolean | null {
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser?.uid) return null;
+
+    const raw = localStorage.getItem(this.cacheKey(currentUser.uid));
+    if (raw === null) return null;
+    return raw === 'true';
+  }
+
+  private setCachedUserHasFamily(uid: string, value: boolean): void {
+    localStorage.setItem(this.cacheKey(uid), value ? 'true' : 'false');
+    this.userHasFamilySubject.next(value);
+  }
+
   async checkUserHasFamily(): Promise<boolean> {
     try {
       const currentUser = this.authService.getCurrentUser();
       if (!currentUser) {
+        this.userHasFamilySubject.next(false);
         return false;
       }
 
@@ -48,6 +70,7 @@ export class FamilyService {
 
       if (!familyQuerySnapshot.empty) {
         console.log('checkUserHasFamily: User has family documents in List Of Families');
+        this.setCachedUserHasFamily(currentUser.uid, true);
         return true;
       }
 
@@ -65,14 +88,17 @@ export class FamilyService {
 
         if (familyName && familyRole) {
           console.log(`checkUserHasFamily: User is a ${familyRole} in family "${familyName}"`);
+          this.setCachedUserHasFamily(currentUser.uid, true);
           return true;
         }
       }
 
       console.log('checkUserHasFamily: User does not have a family');
+      this.setCachedUserHasFamily(currentUser.uid, false);
       return false;
     } catch (error) {
       console.error('Error checking user family status:', error);
+      this.userHasFamilySubject.next(false);
       return false;
     }
   }

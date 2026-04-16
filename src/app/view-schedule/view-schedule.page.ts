@@ -7,6 +7,7 @@ import { FamilyService } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
 import { LoadingController, ToastController } from '@ionic/angular';
+import { RoleAccessService, UserRole } from '../services/role-access.service';
 
 interface ScheduleItem {
   id: string;
@@ -36,6 +37,7 @@ export class ViewSchedulePage implements OnInit {
   schedules: ScheduleItem[] = [];
   isLoading: boolean = true;
   familyName: string = '';
+  userRole: UserRole | null = null;
   private autoCompleteInterval: any;
 
   constructor(
@@ -47,10 +49,12 @@ export class ViewSchedulePage implements OnInit {
     private panicService: PanicService,
     private notificationService: NotificationService,
     private loadingController: LoadingController,
-    private toastController: ToastController
+    private toastController: ToastController,
+    private roleAccessService: RoleAccessService
   ) { }
 
   async ngOnInit() {
+    this.userRole = await this.roleAccessService.getUserRole();
     await this.loadScheduleData();
     this.startAutomaticScheduleCompletion();
   }

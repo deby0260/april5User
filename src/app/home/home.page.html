@@ -141,7 +141,7 @@
           <ion-icon name="calendar-outline" class="no-pickups-icon"></ion-icon>
           <h3>No Upcoming Pickups</h3>
           <p>No pickup schedules have been created for your family yet.</p>
-          <ion-button fill="outline" (click)="navigateTo('/scheduling')">
+          <ion-button *ngIf="userRole?.canAccessScheduling" fill="outline" (click)="navigateTo('/scheduling')">
             Create Schedule
           </ion-button>
         </div>
