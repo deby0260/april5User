@@ -12,8 +12,11 @@ interface Notification {
   title: string;
   message: string;
   time: string;
+  sortTime: number;
   isRead: boolean;
   joinRequestId?: string;
+  joinRequestStatus?: 'pending' | 'approved' | 'denied';
+  joinRequestRole?: 'parent' | 'companion';
   senderId?: string;
   senderName?: string;
   familyName?: string;
@@ -54,25 +57,43 @@ export class NotificationsPage implements OnInit {
       if (currentUser) {
         const realNotifications = await this.joinRequestService.getUserNotifications(currentUser.uid);
 
-        
-        this.notifications = realNotifications.map(notification => ({
-          id: notification.id || '',
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          time: this.formatTime(notification.createdAt),
-          isRead: notification.isRead,
-          joinRequestId: notification.joinRequestId,
-          senderId: notification.senderId,
-          senderName: notification.senderName,
-          familyName: notification.familyName
-        }));
+        this.notifications = await Promise.all(
+          realNotifications.map(async (notification) => {
+            let joinRequestStatus: 'pending' | 'approved' | 'denied' | undefined;
+            let joinRequestRole: 'parent' | 'companion' | undefined;
+
+            if (notification.type === 'join_request' && notification.joinRequestId) {
+              const jr = await this.joinRequestService.getJoinRequestById(notification.joinRequestId);
+              if (jr) {
+                joinRequestStatus = jr.status;
+                joinRequestRole = jr.role;
+              }
+            }
+
+            return {
+              id: notification.id || '',
+              type: notification.type,
+              title: notification.title,
+              message: notification.type === 'panic_alert' && notification.senderName
+                ? `Emergency alert triggered by ${notification.senderName}`
+                : notification.message,
+              time: this.formatTime(notification.createdAt),
+              sortTime: this.getTimestampMs(notification.createdAt),
+              isRead: notification.isRead,
+              joinRequestId: notification.joinRequestId,
+              joinRequestStatus,
+              joinRequestRole,
+              senderId: notification.senderId,
+              senderName: notification.senderName,
+              familyName: notification.familyName,
+              passwordChanged: (notification as any).passwordChanged === true
+            } as Notification;
+          })
+        );
 
         
         this.notifications.sort((a, b) => {
-          const timeA = this.parseTime(a.time);
-          const timeB = this.parseTime(b.time);
-          return timeB - timeA;
+          return b.sortTime - a.sortTime;
         });
       }
     } catch (error) {
@@ -91,34 +112,29 @@ export class NotificationsPage implements OnInit {
       const diffMs = now.getTime() - date.getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
+      const timeOfDay = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
       if (diffDays === 0) {
-        return 'Today';
+        return `Today, ${timeOfDay}`;
       } else if (diffDays === 1) {
-        return 'Yesterday';
+        return `Yesterday, ${timeOfDay}`;
       } else if (diffDays < 7) {
-        return `${diffDays} days ago`;
+        return `${diffDays} days ago, ${timeOfDay}`;
       } else {
-        return date.toLocaleDateString();
+        return `${date.toLocaleDateString()}, ${timeOfDay}`;
       }
     } catch (error) {
       return 'Unknown';
     }
   }
 
-  parseTime(timeString: string): number {
-    const now = new Date();
-
-    switch (timeString) {
-      case 'Today':
-        return now.getTime();
-      case 'Yesterday':
-        return now.getTime() - (24 * 60 * 60 * 1000);
-      default:
-        if (timeString.includes('days ago')) {
-          const days = parseInt(timeString.split(' ')[0]);
-          return now.getTime() - (days * 24 * 60 * 60 * 1000);
-        }
-        return new Date(timeString).getTime();
+  private getTimestampMs(timestamp: any): number {
+    try {
+      const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+      const ms = date?.getTime?.();
+      return typeof ms === 'number' && !Number.isNaN(ms) ? ms : 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -131,11 +147,14 @@ export class NotificationsPage implements OnInit {
 
     
     if (notification.type === 'join_request' && notification.joinRequestId) {
+      if (notification.joinRequestStatus && notification.joinRequestStatus !== 'pending') {
+        return;
+      }
       await this.handleJoinRequestNotification(notification);
     }
 
     
-    if (notification.type === 'password_change_required') {
+    if (notification.type === 'password_change_required' && !notification.passwordChanged) {
       await this.handlePasswordChangeNotification(notification);
     }
   }

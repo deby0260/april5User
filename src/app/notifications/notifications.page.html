@@ -24,7 +24,7 @@
         class="notification-item"
         *ngFor="let notification of notifications"
         [class.unread]="!notification.isRead"
-        [class.clickable]="notification.type === 'join_request' || notification.type === 'password_change_required'"
+        [class.clickable]="(notification.type === 'join_request' && notification.joinRequestStatus !== 'approved' && notification.joinRequestStatus !== 'denied') || (notification.type === 'password_change_required' && !notification.passwordChanged)"
         (click)="onNotificationClick(notification)">
 
         <div class="notification-icon">
@@ -41,9 +41,37 @@
           </div>
           <p class="notification-message">{{ notification.message }}</p>
 
-          <p class="action-hint" *ngIf="notification.type === 'join_request'">
+          <p class="action-hint" *ngIf="notification.type === 'join_request' && (!notification.joinRequestStatus || notification.joinRequestStatus === 'pending')">
             Tap to approve or deny
           </p>
+
+          <div class="join-status" *ngIf="notification.type === 'join_request' && notification.joinRequestStatus && notification.joinRequestStatus !== 'pending'">
+            <div class="status-pill" [class.approved]="notification.joinRequestStatus === 'approved'" [class.denied]="notification.joinRequestStatus === 'denied'">
+              <ion-icon [name]="notification.joinRequestStatus === 'approved' ? 'checkmark-circle' : 'close-circle'"></ion-icon>
+              <span>{{ notification.joinRequestStatus === 'approved' ? 'Approved' : 'Denied' }}</span>
+            </div>
+            <div class="status-subtext">
+              {{ notification.joinRequestStatus === 'approved'
+                ? ('Member added as ' + (notification.joinRequestRole || 'companion'))
+                : 'Request was denied' }}
+            </div>
+          </div>
+
+          <div class="join-status" *ngIf="notification.type === 'join_approved'">
+            <div class="status-pill approved">
+              <ion-icon name="checkmark-circle"></ion-icon>
+              <span>Accepted</span>
+            </div>
+            <div class="status-subtext">You can now access the family features</div>
+          </div>
+
+          <div class="join-status" *ngIf="notification.type === 'join_denied'">
+            <div class="status-pill denied">
+              <ion-icon name="close-circle"></ion-icon>
+              <span>Denied</span>
+            </div>
+            <div class="status-subtext">Your request was not approved</div>
+          </div>
 
           <p class="action-hint password-hint" *ngIf="notification.type === 'password_change_required' && !notification.passwordChanged">
             <ion-icon name="alert-circle"></ion-icon>
@@ -62,8 +90,11 @@
           </div>
 
           <div *ngIf="notification.type === 'password_change_required' && notification.passwordChanged" class="password-completed">
-            <ion-icon name="checkmark-circle"></ion-icon>
-            <span>Password changed successfully</span>
+            <div class="completed-pill">
+              <ion-icon name="checkmark-circle"></ion-icon>
+              <span>Completed</span>
+            </div>
+            <div class="completed-subtext">Password already changed</div>
           </div>
         </div>
 
@@ -71,7 +102,7 @@
           <div class="unread-dot"></div>
         </div>
 
-        <div class="action-arrow" *ngIf="notification.type === 'join_request' || (notification.type === 'password_change_required' && !notification.passwordChanged)">
+        <div class="action-arrow" *ngIf="(notification.type === 'join_request' && (!notification.joinRequestStatus || notification.joinRequestStatus === 'pending')) || (notification.type === 'password_change_required' && !notification.passwordChanged)">
           <ion-icon name="chevron-forward"></ion-icon>
         </div>
       </div>

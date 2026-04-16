@@ -1,0 +1,14 @@
+<div class="emergency-banner" *ngIf="activeEmergency">
+  <div class="left">
+    <ion-icon name="warning" class="warn-icon"></ion-icon>
+    <div class="text">
+      <div class="headline">EMERGENCY ALERT</div>
+      <div class="subline">Triggered by {{ activeEmergency.triggeredByName }} · {{ timeText }}</div>
+    </div>
+  </div>
+
+  <ion-button size="small" fill="solid" class="view-btn" (click)="openNotifications()">
+    View
+  </ion-button>
+</div>
+

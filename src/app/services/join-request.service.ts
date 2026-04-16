@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, addDoc, query, where, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from '@angular/fire/firestore';
+import { Firestore, collection, addDoc, query, where, getDocs, doc, updateDoc, deleteDoc, serverTimestamp, getDoc } from '@angular/fire/firestore';
 import { AuthService, UserData } from './auth';
 
 export interface JoinRequest {
@@ -18,7 +18,18 @@ export interface JoinRequest {
 
 export interface FamilyNotification {
   id?: string;
-  type: 'join_request' | 'join_approved' | 'join_denied';
+  type:
+    | 'schedule'
+    | 'request'
+    | 'success'
+    | 'join_request'
+    | 'join_approved'
+    | 'join_denied'
+    | 'schedule_completion'
+    | 'schedule_assignment'
+    | 'pickup_completion'
+    | 'panic_alert'
+    | 'password_change_required';
   title: string;
   message: string;
   recipientId: string;
@@ -221,16 +232,12 @@ export class JoinRequestService {
   
   async getJoinRequestById(requestId: string): Promise<JoinRequest | null> {
     try {
-      const joinRequestsCollection = collection(this.firestore, 'Join Requests');
-      const q = query(joinRequestsCollection);
-
-      const querySnapshot = await getDocs(q);
-      const requestDoc = querySnapshot.docs.find(doc => doc.id === requestId);
-
-      if (requestDoc) {
+      const requestRef = doc(this.firestore, 'Join Requests', requestId);
+      const snap = await getDoc(requestRef);
+      if (snap.exists()) {
         return {
-          id: requestDoc.id,
-          ...requestDoc.data()
+          id: snap.id,
+          ...(snap.data() as any)
         } as JoinRequest;
       }
       return null;

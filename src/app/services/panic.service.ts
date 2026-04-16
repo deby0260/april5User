@@ -5,11 +5,20 @@ import { FamilyService } from './family.service';
 import { NotificationService } from './notification.service';
 import { AlertController, ToastController } from '@ionic/angular';
 import { JoinRequestService } from './join-request.service';
+import { BehaviorSubject } from 'rxjs';
+
+export type ActiveEmergencyBannerState = {
+  triggeredByName: string;
+  createdAtMs: number;
+  familyName: string;
+};
 
 @Injectable({
   providedIn: 'root'
 })
 export class PanicService {
+  private activeEmergencySubject = new BehaviorSubject<ActiveEmergencyBannerState | null>(null);
+  activeEmergency$ = this.activeEmergencySubject.asObservable();
 
   constructor(
     private firestore: Firestore,
@@ -20,6 +29,10 @@ export class PanicService {
     private toastController: ToastController,
     private joinRequestService: JoinRequestService
   ) { }
+
+  setActiveEmergencyBanner(state: ActiveEmergencyBannerState | null): void {
+    this.activeEmergencySubject.next(state);
+  }
 
   async triggerPanicAlert(onCancel?: () => void, onSend?: () => void): Promise<void> {
     
@@ -135,6 +148,12 @@ export class PanicService {
         totalChildren: childrenInfo.length,
         totalFetchers: fetchers.length
       };
+
+      this.setActiveEmergencyBanner({
+        triggeredByName: currentUser.fullName || currentUser.email || 'Unknown User',
+        createdAtMs: Date.now(),
+        familyName: family.name
+      });
 
       
       await addDoc(panicAlertCollection, panicAlertData);

@@ -169,14 +169,71 @@
       .password-completed {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-top: 8px;
-        color: #34c759;
-        font-size: 13px;
-        font-weight: 500;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
 
-        ion-icon {
-          font-size: 18px;
+        .completed-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(52, 199, 89, 0.12);
+          color: #1f8a3b;
+          font-size: 12px;
+          font-weight: 700;
+
+          ion-icon {
+            font-size: 16px;
+          }
+        }
+
+        .completed-subtext {
+          font-size: 12px;
+          color: #7a7a7a;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+      }
+
+      .join-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+
+        .status-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 800;
+
+          ion-icon {
+            font-size: 16px;
+          }
+
+          &.approved {
+            background: rgba(52, 199, 89, 0.12);
+            color: #1f8a3b;
+          }
+
+          &.denied {
+            background: rgba(255, 59, 48, 0.12);
+            color: #b42318;
+          }
+        }
+
+        .status-subtext {
+          font-size: 12px;
+          color: #7a7a7a;
+          font-weight: 500;
+          white-space: nowrap;
+          text-align: right;
         }
       }
     }
