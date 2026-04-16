@@ -33,6 +33,28 @@ export class AuthService {
   ) {
   }
 
+  private getFriendlyAuthErrorMessage(error: any, fallback: string): string {
+    const code: string | undefined = error?.code;
+    if (code) {
+      switch (code) {
+        case 'auth/email-already-in-use':
+          return 'That email is already in use. Please use a different email.';
+        case 'auth/invalid-email':
+          return 'Please enter a valid email address.';
+        case 'auth/weak-password':
+          return 'Password is too weak. Please choose a stronger password.';
+        case 'auth/network-request-failed':
+          return 'Network error. Please check your connection and try again.';
+        default:
+          return fallback;
+      }
+    }
+
+    const rawMessage = (error?.message ?? '').toString();
+    const cleaned = rawMessage.replace(/^Firebase:\s*/i, '').trim();
+    return cleaned ? cleaned : fallback;
+  }
+
   async registerUser(userData: Omit<UserData, 'uid'>): Promise<{ success: boolean; message: string; uid?: string }> {
     try {
 
@@ -70,7 +92,7 @@ export class AuthService {
       console.error('Registration error:', error);
       return {
         success: false,
-        message: error.message || 'Registration failed'
+        message: this.getFriendlyAuthErrorMessage(error, 'Registration failed. Please try again.')
       };
     }
   }

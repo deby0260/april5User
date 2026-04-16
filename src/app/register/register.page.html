@@ -11,52 +11,77 @@
     </div>
 
     <div class="form-section">
-      <ion-item class="input-item">
-        <ion-input
-          type="text"
-          placeholder="Full Name"
-          [(ngModel)]="fullName"
-          class="custom-input">
-        </ion-input>
-      </ion-item>
+      <div class="field-wrapper">
+        <div class="field-error" *ngIf="fullNameError">{{ fullNameError }}</div>
+        <ion-item class="input-item">
+          <ion-input
+            type="text"
+            placeholder="Full Name"
+            [(ngModel)]="fullName"
+            class="custom-input"
+            (ionBlur)="markTouched('fullName')">
+          </ion-input>
+        </ion-item>
+      </div>
 
-      <ion-item class="input-item">
-        <ion-input
-          type="email"
-          placeholder="Email Address"
-          [(ngModel)]="email"
-          class="custom-input">
-        </ion-input>
-      </ion-item>
+      <div class="field-wrapper">
+        <div class="field-error" *ngIf="emailError">{{ emailError }}</div>
+        <ion-item class="input-item">
+          <ion-input
+            type="email"
+            placeholder="Email Address"
+            [(ngModel)]="email"
+            class="custom-input"
+            (ionBlur)="markTouched('email')">
+          </ion-input>
+        </ion-item>
+      </div>
 
-      <ion-item class="input-item">
-        <ion-input
-          type="tel"
-          placeholder="Contact Number"
-          [(ngModel)]="contactNumber"
-          class="custom-input">
-        </ion-input>
-      </ion-item>
+      <div class="field-wrapper">
+        <div class="field-error" *ngIf="contactNumberError">{{ contactNumberError }}</div>
+        <ion-item class="input-item">
+          <ion-input
+            type="tel"
+            placeholder="Contact Number"
+            [(ngModel)]="contactNumber"
+            class="custom-input"
+            inputmode="numeric"
+            maxlength="11"
+            pattern="[0-9]*"
+            (ionInput)="onContactNumberInput($event)"
+            (ionBlur)="markTouched('contactNumber')">
+          </ion-input>
+        </ion-item>
+      </div>
 
-      <ion-item class="input-item">
-        <ion-input
-          type="password"
-          placeholder="Password"
-          [(ngModel)]="password"
-          class="custom-input">
-        </ion-input>
-      </ion-item>
+      <div class="field-wrapper">
+        <div class="field-error" *ngIf="passwordError">{{ passwordError }}</div>
+        <ion-item class="input-item">
+          <ion-input
+            type="password"
+            placeholder="Password"
+            [(ngModel)]="password"
+            class="custom-input"
+            (ionBlur)="markTouched('password')">
+          </ion-input>
+        </ion-item>
+      </div>
 
-      <ion-item class="input-item">
-        <ion-input
-          type="password"
-          placeholder="Confirm Password"
-          [(ngModel)]="confirmPassword"
-          class="custom-input">
-        </ion-input>
-      </ion-item>
+      <div class="field-wrapper">
+        <div class="field-error" *ngIf="confirmPasswordError">{{ confirmPasswordError }}</div>
+        <ion-item class="input-item">
+          <ion-input
+            type="password"
+            placeholder="Confirm Password"
+            [(ngModel)]="confirmPassword"
+            class="custom-input"
+            (ionBlur)="markTouched('confirmPassword')">
+          </ion-input>
+        </ion-item>
+      </div>
 
       <div class="photo-upload">
+        <div class="field-error photo-field-error" *ngIf="profilePhotoError">{{ profilePhotoError }}</div>
         <div class="photo-label">
           <span class="required-label">Profile Photo *</span>
           <span class="required-note">(Required)</span>
@@ -83,11 +108,6 @@
           {{ profilePicture ? 'Change Profile Photo' : 'Upload Profile Photo *' }}
         </ion-button>
 
-        <div class="photo-requirement-note" *ngIf="!profilePicture">
-          <ion-text color="danger">
-            <small>Profile picture is required to complete registration</small>
-          </ion-text>
-        </div>
       </div>
 
       <ion-button

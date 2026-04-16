@@ -44,6 +44,26 @@
   .form-section {
     flex: 1;
 
+    .field-wrapper {
+      margin-bottom: 15px;
+
+      .input-item {
+        margin-bottom: 0;
+      }
+    }
+
+    .field-error {
+      color: #e74c3c;
+      font-size: 12px;
+      line-height: 1.3;
+      margin: 0 8px 6px 12px;
+    }
+
+    .photo-field-error {
+      text-align: left;
+      margin-bottom: 8px;
+    }
+
     .input-item {
       --background: transparent;
       --border-color: var(--brand);
@@ -133,16 +153,6 @@
         &[color="danger"] {
           --border-color: #e74c3c;
           --color: #e74c3c;
-        }
-      }
-
-      .photo-requirement-note {
-        margin-top: 8px;
-        text-align: center;
-
-        small {
-          font-size: 12px;
-          font-style: italic;
         }
       }
     }
