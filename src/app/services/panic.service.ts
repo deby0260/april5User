@@ -49,6 +49,15 @@ export class PanicService {
       message: 'This will immediately notify all family members and administrators about your emergency.',
       backdropDismiss: false,
       buttons: [
+
+        {
+          text: 'SEND ALERT',
+          cssClass: 'panic-send-btn',
+          handler: () => {
+            this.sendPanicAlert();
+            onSend?.();
+          }
+        },
         {
           text: 'CANCEL',
           role: 'cancel',
@@ -56,14 +65,6 @@ export class PanicService {
           handler: () => {
             console.log('Panic alert cancelled');
             onCancel?.();
-          }
-        },
-        {
-          text: 'SEND ALERT',
-          cssClass: 'panic-send-btn',
-          handler: () => {
-            this.sendPanicAlert();
-            onSend?.();
           }
         }
       ],
