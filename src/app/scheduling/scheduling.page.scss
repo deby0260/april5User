@@ -346,26 +346,27 @@
 }
 
 .custom-datetime ion-datetime {
-  // Change calendar background to an even lighter teal
-  --background: #B2E6ED !important; // much lighter version of #129CAE
-  --background-rgb: 178,230,237 !important;
+  // Calendar container background
+  --background: #EAF7F8 !important;
+  --background-rgb: 234,247,248 !important;
 
   --header-background: #129CAE !important;
   --header-color: #F7FAFC !important;
 
-  --ion-text-color: #129CAE !important;
-  --ion-text-color-rgb: 18,156,174 !important;
+  /* Calendar text: force black everywhere */
+  --ion-text-color: #000 !important;
+  --ion-text-color-rgb: 0,0,0 !important;
   --ion-color-step-850: #129CAE !important;
   --ion-color-step-900: #129CAE !important;
   --ion-color-step-950: #129CAE !important;
 
-  --calendar-day-color: #129CAE !important;
-  --calendar-day-color-today: #129CAE !important;
-  --calendar-day-color-active: #F7FAFC !important;
+  --calendar-day-color: #000 !important;
+  --calendar-day-color-today: #000 !important;
+  --calendar-day-color-active: #000 !important;
   --calendar-day-background-active: #38B2AC !important;
   --calendar-day-background-today: #129CAE !important;
 
-  --calendar-day-color-disabled: #718096 !important;
+  --calendar-day-color-disabled: #000 !important;
 
   --wheel-color: #129CAE !important;
   --wheel-color-active: #38B2AC !important;
@@ -381,10 +382,10 @@
 /* Make month/year and weekday text white for Ionic 7+ */
 .custom-datetime ion-datetime::part(month-year),
 .custom-datetime ion-datetime::part(weekday) {
-  color: #fff !important;
+  color: #000 !important;
 }
 
-/* 2) Shadow parts (Ion 7+) — visible, bold day pills */
+/* 2) Shadow parts (Ion 7+) — day numbers */
 .custom-datetime ion-datetime::part(calendar-day) {
   width: 44px;
   height: 44px;
@@ -395,30 +396,36 @@
   align-items: center;
   justify-content: center;
   letter-spacing: .2px;
-  color: #F7FAFC !important;
+  color: #000 !important;
   opacity: 1 !important;
-  background: #129CAE !important;
+  background: transparent !important;
+}
+
+/* Disabled/unavailable dates (e.g. not matching chosen weekday) */
+.custom-datetime ion-datetime::part(calendar-day):disabled {
+  color: #6b7280 !important; /* similar darkness to weekday labels */
+  opacity: 1 !important;    /* override Ionic's default 0.4 */
 }
 .custom-datetime ion-datetime::part(calendar-day-active) {
   background: #38B2AC !important;
-  color: #129CAE !important;
+  color: #000 !important;
   box-shadow: inset 0 0 0 2px #117a8b;
   opacity: 1 !important;
 }
 .custom-datetime ion-datetime::part(calendar-day-today) {
   background: #117a8b !important;
-  color: #F7FAFC !important;
+  color: #000 !important;
   box-shadow: inset 0 0 0 2px #38B2AC;
   opacity: 1 !important;
 }
 .custom-datetime ion-datetime::part(calendar-day-disabled) {
-  color: #718096 !important;
+  color: #000 !important;
   opacity: .85 !important;
 }
 
 /* 3) Fallback for older Ionic builds */
 .scheduling-page ion-datetime {
-  background: #129CAE !important;
+  background: #EAF7F8 !important;
 
   .calendar-header,
   .datetime-header,
