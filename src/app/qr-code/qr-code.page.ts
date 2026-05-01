@@ -27,6 +27,8 @@ export class QrCodePage implements OnInit {
   private readonly QR_STORAGE_KEY = 'fetchsafe_qr_data_v2';
   private readonly QR_EXPIRY_HOURS = 24;
   private isUsingCachedQR = false;
+  private onlineListener?: () => void;
+  private offlineListener?: () => void;
 
   private readonly qrApiBaseUrl = 'https://api.qrserver.com/v1/create-qr-code/';
   private readonly qrApiParams = {
@@ -53,9 +55,36 @@ export class QrCodePage implements OnInit {
     this.currentUser = this.authService.getCurrentUser();
 
     if (this.currentUser) {
-      
-      this.clearCachedQRCode();
-      await this.generateUniqueQRCode();
+      // If we're offline, show the last cached QR (image data URL) so guards can still scan.
+      const cached = this.loadCachedQRCode();
+      if (!navigator.onLine) {
+        if (this.isQRCodeValid(cached) && cached?.imageDataUrl) {
+          this.qrCodeImageUrl = cached.imageDataUrl;
+          this.qrPattern = [];
+          this.isUsingCachedQR = true;
+        } else {
+          this.generateQRPattern();
+        }
+      } else {
+        // Online: generate a fresh QR and update cache.
+        await this.generateUniqueQRCode();
+      }
+
+      // Keep UI responsive to connectivity changes while on this page.
+      this.offlineListener = () => {
+        const c = this.loadCachedQRCode();
+        if (this.isQRCodeValid(c) && c?.imageDataUrl) {
+          this.qrCodeImageUrl = c.imageDataUrl;
+          this.qrPattern = [];
+          this.isUsingCachedQR = true;
+        }
+      };
+      this.onlineListener = () => {
+        // When back online, prefer a refreshed QR (also refreshes cache).
+        void this.generateUniqueQRCode();
+      };
+      window.addEventListener('offline', this.offlineListener);
+      window.addEventListener('online', this.onlineListener);
     } else {
       this.generateQRPattern();
     }
@@ -240,12 +269,24 @@ export class QrCodePage implements OnInit {
       this.qrPattern = [];
       this.isUsingCachedQR = false;
 
-      this.cacheQRCode(qrUrl, hostedUrl, familyData);
+      // Cache a data URL so the image still shows offline (remote URL won't load offline).
+      const imageDataUrl = await this.fetchImageAsDataUrl(qrUrl);
+      this.cacheQRCode(qrUrl, imageDataUrl, hostedUrl, familyData);
       await this.showToast('QR Code generated successfully!', 'success');
     } catch (err) {
       console.error('❌ QR Generation Error:', err);
-      await this.showToast('Failed to generate QR. Showing fallback pattern.', 'warning');
-      this.generateQRPattern();
+      // If online generation fails, try cached QR first; otherwise fallback pattern.
+      const cached = this.loadCachedQRCode();
+      if (this.isQRCodeValid(cached) && cached?.imageDataUrl) {
+        this.qrCodeImageUrl = cached.imageDataUrl;
+        this.qrPattern = [];
+        this.isUsingCachedQR = true;
+        await this.showToast('Using cached QR code (offline/failed refresh).', 'warning');
+      } else {
+        await this.showToast('Failed to generate QR. Showing fallback pattern.', 'warning');
+        this.qrCodeImageUrl = '';
+        this.generateQRPattern();
+      }
     } finally {
       this.isLoading = false;
       await loading.dismiss();
@@ -323,15 +364,44 @@ export class QrCodePage implements OnInit {
   }
 
   async onQRImageError(_event?: Event) {
+    // If the remote image fails (common when offline), prefer the cached data URL if available.
+    const cached = this.loadCachedQRCode();
+    if (this.isQRCodeValid(cached) && cached?.imageDataUrl) {
+      this.qrCodeImageUrl = cached.imageDataUrl;
+      this.qrPattern = [];
+      this.isUsingCachedQR = true;
+      await this.showToast('Offline - showing cached QR code.', 'warning');
+      return;
+    }
+
     await this.showToast('Failed to load QR code image. Showing fallback pattern.', 'warning');
     this.qrCodeImageUrl = '';
     this.generateQRPattern();
   }
 
-  private cacheQRCode(imageUrl: string, websiteUrl: string, data: any): void {
+  private async fetchImageAsDataUrl(url: string): Promise<string> {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      const blob = await res.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read QR image'));
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // If fetch fails, return empty string; we'll still cache the hosted URL string.
+      return '';
+    }
+  }
+
+  private cacheQRCode(imageUrl: string, imageDataUrl: string, websiteUrl: string, data: any): void {
     const now = Date.now();
     const payload = {
-      imageUrl, websiteUrl, data,
+      imageUrl,
+      imageDataUrl,
+      websiteUrl,
+      data,
       timestamp: now,
       userId: this.currentUser?.uid,
       expiresAt: now + this.QR_EXPIRY_HOURS * 60 * 60 * 1000,

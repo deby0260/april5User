@@ -1,23 +1,33 @@
 import { Component, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
-import { Firestore, collection, addDoc, serverTimestamp } from '@angular/fire/firestore';
+import {
+  Firestore,
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+} from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { FamilyService, FamilyMember } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
 import { LoadingController, ToastController } from '@ionic/angular';
 import { RoleAccessService } from '../services/role-access.service';
+import type { DatetimeHighlightCallback } from '@ionic/core';
 
 interface ScheduleData {
-  fetcherName: string;
   fetcherUID: string;
+  fetcherName: string;
+  companionName: string;
   selectedChildren: any[];
   selectedDays: string[];
+  /** YYYY-MM-DD on the calendar; must match one of selectedDays; other selected weekdays use the same calendar week */
   selectedDate: string;
   selectedTime: string;
   familyName: string;
   parentName: string;
-  companionName: string;
 }
 
 @Component({
@@ -28,15 +38,15 @@ interface ScheduleData {
 })
 export class SchedulingPage implements OnInit {
   scheduleData: ScheduleData = {
-    fetcherName: '',
     fetcherUID: '',
+    fetcherName: '',
+    companionName: '',
     selectedChildren: [],
     selectedDays: [],
     selectedDate: '',
     selectedTime: '00:00',
     familyName: '',
     parentName: '',
-    companionName: ''
   };
 
   familyMembers: FamilyMember[] = [];
@@ -45,6 +55,29 @@ export class SchedulingPage implements OnInit {
   canManageSchedule: boolean = false;
   minDate: string = '';
   maxDate: string = '';
+  /** Bumps when weekday selection changes so ion-datetime remounts cleanly */
+  calendarRemountKey = 0;
+  private saveInProgress = false;
+
+  private static readonly LABEL_TO_MONDAY_OFFSET: Record<string, number> = {
+    Monday: 0,
+    Tuesday: 1,
+    Wednesday: 2,
+    Thursday: 3,
+    Friday: 4,
+    Saturday: 5,
+    Sunday: 6,
+  };
+
+  private static readonly DAY_SORT_ORDER: Record<string, number> = {
+    Monday: 0,
+    Tuesday: 1,
+    Wednesday: 2,
+    Thursday: 3,
+    Friday: 4,
+    Saturday: 5,
+    Sunday: 6,
+  };
 
   constructor(
     private location: Location,
@@ -56,10 +89,9 @@ export class SchedulingPage implements OnInit {
     private loadingController: LoadingController,
     private toastController: ToastController,
     private roleAccessService: RoleAccessService
-  ) { }
+  ) {}
 
   async ngOnInit() {
-    
     const today = new Date();
     this.minDate = today.toISOString();
 
@@ -76,17 +108,14 @@ export class SchedulingPage implements OnInit {
       const currentUser = this.authService.getCurrentUser();
       if (!currentUser) return;
 
-      
       const family = await this.familyService.getUserFamily();
       if (!family) return;
 
       this.scheduleData.familyName = family.name;
       this.scheduleData.parentName = currentUser.fullName || currentUser.email || 'Parent';
 
-      
       this.familyMembers = await this.familyService.getFamilyMembers(family.name);
 
-      
       this.children = await this.familyService.getFamilyChildren(family.name);
 
       console.log('Family members loaded:', this.familyMembers);
@@ -104,17 +133,20 @@ export class SchedulingPage implements OnInit {
       const family = await this.familyService.getUserFamily();
       if (!family) return;
 
-      // Use RoleAccessService to get the correct role (checks Registerd collection first)
       const userRole = await this.roleAccessService.getUserRole();
 
       if (userRole) {
         this.currentUserRole = userRole.role;
         this.canManageSchedule = userRole.canAccessScheduling;
-        console.log('✅ Scheduling page - User role:', this.currentUserRole, 'Can manage schedule:', this.canManageSchedule);
+        console.log(
+          '✅ Scheduling page - User role:',
+          this.currentUserRole,
+          'Can manage schedule:',
+          this.canManageSchedule
+        );
       } else {
-        // Fallback to checking family members
         const members = await this.familyService.getFamilyMembers(family.name);
-        const userMember = members.find(member => member.uid === currentUser.uid);
+        const userMember = members.find((member) => member.uid === currentUser.uid);
 
         if (userMember) {
           this.currentUserRole = userMember.role;
@@ -128,42 +160,73 @@ export class SchedulingPage implements OnInit {
   }
 
   getAvailableFetchers(): FamilyMember[] {
+    if (!this.canManageSchedule) {
+      return [];
+    }
     const currentUser = this.authService.getCurrentUser();
-    if (!currentUser) return [];
-
-    
-    if (this.currentUserRole === 'owner') {
-      
-      return this.familyMembers.filter(member =>
-        member.role === 'parent' || member.role === 'companion'
-      );
-    } else if (this.currentUserRole === 'parent') {
-      
-      return this.familyMembers.filter(member =>
-        member.role === 'companion'
-      );
+    if (!currentUser) {
+      return [];
     }
 
-    return [];
-  }
+    const eligible = this.familyMembers.filter(
+      (member) =>
+        member.role === 'owner' || member.role === 'parent' || member.role === 'companion'
+    );
 
-  getSelectedMember(): FamilyMember | null {
-    if (!this.scheduleData.fetcherUID) return null;
-    return this.familyMembers.find(member => member.uid === this.scheduleData.fetcherUID) || null;
+    const byUid = new Map<string, FamilyMember>();
+    for (const m of eligible) {
+      byUid.set(m.uid, m);
+    }
+
+    if (!byUid.has(currentUser.uid)) {
+      const role =
+        this.currentUserRole === 'owner' || this.currentUserRole === 'parent'
+          ? (this.currentUserRole as FamilyMember['role'])
+          : ('parent' as FamilyMember['role']);
+      byUid.set(currentUser.uid, {
+        id: currentUser.uid,
+        uid: currentUser.uid,
+        name: currentUser.fullName || currentUser.email || 'Me',
+        email: currentUser.email || '',
+        contactNumber: currentUser.contactNumber || '',
+        role,
+        joinedDate: null,
+      });
+    }
+
+    return Array.from(byUid.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
   }
 
   onFetcherSelected(event: any) {
-    const member = event.detail.value;
-    if (member) {
-      this.scheduleData.fetcherName = member.name;
-      this.scheduleData.fetcherUID = member.uid;
-      this.scheduleData.companionName = member.name;
-      console.log('Fetcher selected:', member.name);
+    const uid = event.detail.value as string | null | undefined;
+    if (!uid) {
+      this.scheduleData.fetcherUID = '';
+      this.scheduleData.fetcherName = '';
+      this.scheduleData.companionName = '';
+      this.scheduleData.selectedDays = [];
+      this.scheduleData.selectedDate = '';
+      this.calendarRemountKey += 1;
+      return;
+    }
+    const member = this.getAvailableFetchers().find((m) => m.uid === uid);
+    if (!member) {
+      return;
+    }
+    const uidChanged = this.scheduleData.fetcherUID !== member.uid;
+    this.scheduleData.fetcherUID = member.uid;
+    this.scheduleData.fetcherName = member.name;
+    this.scheduleData.companionName = member.name;
+    if (uidChanged) {
+      this.scheduleData.selectedDays = [];
+      this.scheduleData.selectedDate = '';
+      this.calendarRemountKey += 1;
     }
   }
 
   toggleChildSelection(child: any) {
-    const index = this.scheduleData.selectedChildren.findIndex(c => c.name === child.name);
+    const index = this.scheduleData.selectedChildren.findIndex((c) => c.name === child.name);
     if (index > -1) {
       this.scheduleData.selectedChildren.splice(index, 1);
     } else {
@@ -172,7 +235,7 @@ export class SchedulingPage implements OnInit {
   }
 
   isChildSelected(child: any): boolean {
-    return this.scheduleData.selectedChildren.some(c => c.name === child.name);
+    return this.scheduleData.selectedChildren.some((c) => c.name === child.name);
   }
 
   selectAllChildren() {
@@ -184,92 +247,282 @@ export class SchedulingPage implements OnInit {
   }
 
   toggleDay(day: string) {
-    
     if (this.scheduleData.selectedDays.includes(day)) {
-      
-      this.scheduleData.selectedDays = [];
+      this.scheduleData.selectedDays = this.scheduleData.selectedDays.filter((d) => d !== day);
     } else {
-      
-      this.scheduleData.selectedDays = [day];
+      this.scheduleData.selectedDays = Array.from(new Set([...this.scheduleData.selectedDays, day]));
     }
-
-    
-    this.scheduleData.selectedDate = '';
+    this.syncSelectedDateAfterDaysChange();
+    this.calendarRemountKey += 1;
   }
 
   onDateChange(event: any) {
     const selectedDate = event.detail.value;
     if (selectedDate) {
-      
-      this.scheduleData.selectedDate = selectedDate.split('T')[0];
+      this.scheduleData.selectedDate = String(selectedDate).split('T')[0];
     }
   }
 
-  getMinDate(): string {
-    return this.minDate;
+  /** ion-datetime: noon avoids DST / timezone day-shift */
+  get selectedDateIonValue(): string {
+    const d = this.scheduleData.selectedDate;
+    if (!d || this.scheduleData.selectedDays.length === 0) {
+      return '';
+    }
+    return d.includes('T') ? d : `${d}T12:00:00`;
   }
 
-  getMaxDate(): string {
-    return this.maxDate;
+  trackCalendarShell = (_index: number, shell: { key: string }) => shell.key;
+
+  get calendarShells(): { key: string }[] {
+    const daysKey = [...this.scheduleData.selectedDays].sort().join(',') || 'none';
+    return [{ key: `${daysKey}-${this.calendarRemountKey}` }];
+  }
+
+  private weekdayFromIonCalendarDay(iso: string): number {
+    const datePart = String(iso).split('T')[0];
+    const parts = datePart.split('-').map((p) => parseInt(p, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      return new Date(iso).getDay();
+    }
+    const [y, m, d] = parts;
+    return new Date(y, m - 1, d).getDay();
+  }
+
+  private labelToJsDay(label: string): number {
+    const dayMap: Record<string, number> = {
+      Sunday: 0,
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+    };
+    return dayMap[label] ?? -1;
   }
 
   isDateEnabled = (dateIsoString: string) => {
-    
     if (this.scheduleData.selectedDays.length === 0) {
       return true;
     }
+    const dayOfWeek = this.weekdayFromIonCalendarDay(dateIsoString);
+    return this.scheduleData.selectedDays.some((day) => this.labelToJsDay(day) === dayOfWeek);
+  };
 
-    const date = new Date(dateIsoString);
-    const dayOfWeek = date.getDay(); 
-    
-    const dayMap: { [key: string]: number } = {
-      'Sunday': 0,
-      'Monday': 1,
-      'Tuesday': 2,
-      'Wednesday': 3,
-      'Thursday': 4,
-      'Friday': 5,
-      'Saturday': 6
+  /**
+   * Tint selected weekdays only inside the same Mon-start week as the chosen date.
+   * The tapped date uses Ionic's default "selected" styling (no duplicate tint).
+   */
+  highlightMatchingWeekdays: DatetimeHighlightCallback = (dateIsoString: string) => {
+    if (this.scheduleData.selectedDays.length === 0 || !this.scheduleData.selectedDate) {
+      return undefined;
+    }
+    if (!this.isDateEnabled(dateIsoString)) {
+      return undefined;
+    }
+    const datePart = String(dateIsoString).split('T')[0];
+    if (datePart === this.scheduleData.selectedDate) {
+      return undefined;
+    }
+    if (!this.isYmdSameMondayWeek(datePart, this.scheduleData.selectedDate)) {
+      return undefined;
+    }
+    return {
+      backgroundColor: 'rgba(18, 156, 174, 0.22)',
+      textColor: '#0f2d2f',
     };
+  };
 
-    return this.scheduleData.selectedDays.some(day => dayMap[day] === dayOfWeek);
+  /** Same calendar week (Monday 00:00 as boundary), local time */
+  private isYmdSameMondayWeek(aYmd: string, bYmd: string): boolean {
+    return this.mondayOfWeekContaining(aYmd).getTime() === this.mondayOfWeekContaining(bYmd).getTime();
   }
 
   getFormattedDate(): string {
-    if (!this.scheduleData.selectedDate) return 'Select Date';
+    if (!this.scheduleData.selectedDate) return 'Select date';
 
-    const date = new Date(this.scheduleData.selectedDate);
+    const [y, m, d] = this.scheduleData.selectedDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
   }
 
+  private firstAvailableDateMatchingSelectedDays(): string {
+    if (this.scheduleData.selectedDays.length === 0) {
+      return '';
+    }
+    const want = new Set(
+      this.scheduleData.selectedDays.map((d) => this.labelToJsDay(d)).filter((n) => n >= 0)
+    );
+
+    const minPart = this.minDate.split('T')[0];
+    const maxPart = this.maxDate.split('T')[0];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 400; i++) {
+      const cand = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+      if (!want.has(cand.getDay())) {
+        continue;
+      }
+      const y = cand.getFullYear();
+      const mo = String(cand.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(cand.getDate()).padStart(2, '0');
+      const ymd = `${y}-${mo}-${dayNum}`;
+      if (ymd >= minPart && ymd <= maxPart) {
+        return ymd;
+      }
+    }
+    return '';
+  }
+
+  private syncSelectedDateAfterDaysChange() {
+    if (this.scheduleData.selectedDays.length === 0) {
+      this.scheduleData.selectedDate = '';
+      return;
+    }
+    if (!this.scheduleData.selectedDate) {
+      this.scheduleData.selectedDate = this.firstAvailableDateMatchingSelectedDays();
+      return;
+    }
+    const dow = this.weekdayFromIonCalendarDay(this.scheduleData.selectedDate);
+    const ok = this.scheduleData.selectedDays.some((d) => this.labelToJsDay(d) === dow);
+    if (!ok) {
+      this.scheduleData.selectedDate = this.firstAvailableDateMatchingSelectedDays();
+    }
+  }
+
+  private mondayOfWeekContaining(ymd: string): Date {
+    const parts = ymd.split('-').map((p) => parseInt(p, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      return new Date(ymd);
+    }
+    const [y, m, d] = parts;
+    const dt = new Date(y, m - 1, d);
+    const dow = dt.getDay();
+    const offsetToMonday = dow === 0 ? -6 : 1 - dow;
+    const mon = new Date(dt);
+    mon.setDate(dt.getDate() + offsetToMonday);
+    mon.setHours(0, 0, 0, 0);
+    return mon;
+  }
+
+  private ymdFromDate(d: Date): string {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+  }
+
+  /** One row per selected weekday, all in the same Mon-start week as selectedDate */
+  private buildToSaveEntries(): { dayLabel: string; date: string }[] {
+    const monday = this.mondayOfWeekContaining(this.scheduleData.selectedDate);
+    const uniqueDays = Array.from(new Set(this.scheduleData.selectedDays));
+    const sorted = uniqueDays.sort(
+      (a, b) =>
+        (SchedulingPage.DAY_SORT_ORDER[a] ?? 99) - (SchedulingPage.DAY_SORT_ORDER[b] ?? 99)
+    );
+    const out: { dayLabel: string; date: string }[] = [];
+    for (const label of sorted) {
+      const off = SchedulingPage.LABEL_TO_MONDAY_OFFSET[label];
+      if (off === undefined) continue;
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + off);
+      out.push({ dayLabel: label, date: this.ymdFromDate(d) });
+    }
+    return out;
+  }
+
+  private normalizeTimeStr(t: string): string {
+    return String(t || '').trim();
+  }
+
+  /** Unique key: same calendar date + same time + same child => duplicate pickup */
+  private pendingScheduleKey(date: string, time: string, childName: string): string {
+    return `${date}|${this.normalizeTimeStr(time)}|${String(childName || '').trim()}`;
+  }
+
+  private async loadPendingScheduleKeysForFamily(familyName: string): Promise<Set<string>> {
+    const schedulesCollection = collection(this.firestore, 'Schedules');
+    const q = query(schedulesCollection, where('Family Name', '==', familyName));
+    const snap = await getDocs(q);
+    const keys = new Set<string>();
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      const status = d['Status'] || 'pending';
+      if (status !== 'pending') {
+        return;
+      }
+      const date = String(d['Date'] || '');
+      const time = this.normalizeTimeStr(d['Time'] || '');
+      const child = String(d['Childs Name'] || '').trim();
+      if (date && time && child) {
+        keys.add(this.pendingScheduleKey(date, time, child));
+      }
+    });
+    return keys;
+  }
+
+  /**
+   * @returns Warning message if any proposed slot conflicts with an existing pending schedule, else null
+   */
+  private async checkConflictsWithExistingPending(
+    toSave: { dayLabel: string; date: string }[],
+    children: any[],
+    time: string
+  ): Promise<string | null> {
+    const family = this.scheduleData.familyName;
+    if (!family) {
+      return null;
+    }
+    const existing = await this.loadPendingScheduleKeysForFamily(family);
+    const normTime = this.normalizeTimeStr(time);
+    for (const entry of toSave) {
+      for (const child of children) {
+        const name = child.name || '';
+        const k = this.pendingScheduleKey(entry.date, normTime, name);
+        if (existing.has(k)) {
+          return `A schedule already exists on ${entry.date} at ${normTime} for ${name}. Pick a different time or date.`;
+        }
+      }
+    }
+    return null;
+  }
+
   async saveSchedule() {
-    
+    if (this.saveInProgress) {
+      return;
+    }
+
     if (!this.canManageSchedule) {
       await this.showToast('You do not have permission to create schedules');
       return;
     }
 
-    if (!this.scheduleData.fetcherName) {
-      await this.showToast('Please select a fetcher');
+    if (!this.scheduleData.fetcherUID) {
+      await this.showToast('Please select who will pick up first');
       return;
     }
 
     if (this.scheduleData.selectedDays.length === 0) {
-      await this.showToast('Please select a day');
-      return;
-    }
-
-    if (this.scheduleData.selectedDays.length > 1) {
-      await this.showToast('Please select only one day at a time');
+      await this.showToast('Please select at least one day for this fetcher');
       return;
     }
 
     if (!this.scheduleData.selectedDate) {
-      await this.showToast('Please select a date');
+      await this.showToast('Please select a date on the calendar');
+      return;
+    }
+
+    const pickedDow = this.weekdayFromIonCalendarDay(this.scheduleData.selectedDate);
+    const pickOk = this.scheduleData.selectedDays.some((d) => this.labelToJsDay(d) === pickedDow);
+    if (!pickOk) {
+      await this.showToast('Pick a date that matches one of your selected weekdays');
       return;
     }
 
@@ -283,10 +536,22 @@ export class SchedulingPage implements OnInit {
       return;
     }
 
+    const toSave = this.buildToSaveEntries();
+    const conflictMessage = await this.checkConflictsWithExistingPending(
+      toSave,
+      this.scheduleData.selectedChildren,
+      this.scheduleData.selectedTime
+    );
+    if (conflictMessage) {
+      await this.showToast(conflictMessage);
+      return;
+    }
+
     const loading = await this.loadingController.create({
-      message: 'Saving schedule...'
+      message: 'Saving schedule...',
     });
     await loading.present();
+    this.saveInProgress = true;
 
     try {
       const currentUser = this.authService.getCurrentUser();
@@ -296,83 +561,119 @@ export class SchedulingPage implements OnInit {
         return;
       }
 
-      
       const schedulesCollection = collection(this.firestore, 'Schedules');
       const schedulePromises = [];
 
-      for (const child of this.scheduleData.selectedChildren) {
-        const scheduleData = {
-          'Childs Grade': child.grade || '',
-          'Childs Name': child.name || '',
-          'Companions Name': this.scheduleData.companionName,
-          'Date': this.scheduleData.selectedDate,
-          'Parent Name': this.scheduleData.parentName,
-          'Time': this.scheduleData.selectedTime,
-          'Family Name': this.scheduleData.familyName,
-          'Days': this.scheduleData.selectedDays.join(', '),
-          'Fetcher UID': this.scheduleData.fetcherUID,
-          'Creator UID': currentUser.uid,
-          'Created At': serverTimestamp(),
-          'Status': 'pending',
-          'id': '' 
-        };
+      const assign = {
+        uid: this.scheduleData.fetcherUID,
+        name: this.scheduleData.companionName || this.scheduleData.fetcherName,
+      };
 
-        console.log('Saving schedule data:', scheduleData);
+      const notifyByFetcher = new Map<
+        string,
+        { fetcherUid: string; fetcherName: string; days: Set<string>; dates: Set<string> }
+      >();
 
-        schedulePromises.push(addDoc(schedulesCollection, scheduleData));
+      for (const entry of toSave) {
+        const key = assign.uid;
+        if (!notifyByFetcher.has(key)) {
+          notifyByFetcher.set(key, {
+            fetcherUid: assign.uid,
+            fetcherName: assign.name,
+            days: new Set<string>(),
+            dates: new Set<string>(),
+          });
+        }
+        notifyByFetcher.get(key)!.days.add(entry.dayLabel);
+        notifyByFetcher.get(key)!.dates.add(entry.date);
+
+        for (const child of this.scheduleData.selectedChildren) {
+          const scheduleData = {
+            'Childs Grade': child.grade || '',
+            'Childs Name': child.name || '',
+            'Companions Name': assign.name,
+            'Date': entry.date,
+            'Parent Name': this.scheduleData.parentName,
+            'Time': this.scheduleData.selectedTime,
+            'Family Name': this.scheduleData.familyName,
+            'Days': entry.dayLabel,
+            'Fetcher UID': assign.uid,
+            'Creator UID': currentUser.uid,
+            'Created At': serverTimestamp(),
+            'Status': 'pending',
+            'Monthly repeat': false,
+            'id': '',
+          };
+
+          schedulePromises.push(addDoc(schedulesCollection, scheduleData));
+        }
       }
 
-      
       await Promise.all(schedulePromises);
 
-      
-      await this.sendScheduleNotification();
+      await this.sendScheduleNotifications(Array.from(notifyByFetcher.values()));
 
       await loading.dismiss();
-      await this.showToast(`Schedule saved successfully for ${this.scheduleData.selectedChildren.length} child(ren)!`);
+      const totalDocs = toSave.length * this.scheduleData.selectedChildren.length;
+      await this.showToast(`Saved ${totalDocs} schedule(s) for ${this.scheduleData.selectedChildren.length} child(ren).`);
 
-      console.log(`Saved ${this.scheduleData.selectedChildren.length} schedules`);
+      console.log(`Saved ${totalDocs} schedule document(s)`);
       this.goBack();
-
     } catch (error) {
       await loading.dismiss();
       console.error('Error saving schedule:', error);
       await this.showToast('Error saving schedule. Please try again.');
+    } finally {
+      this.saveInProgress = false;
     }
   }
 
-  async sendScheduleNotification() {
+  async sendScheduleNotifications(
+    fetcherGroups: Array<{
+      fetcherUid: string;
+      fetcherName: string;
+      days: Set<string>;
+      dates: Set<string>;
+    }>
+  ) {
     try {
       const currentUser = this.authService.getCurrentUser();
-      if (!currentUser || !this.scheduleData.fetcherUID) return;
+      if (!currentUser) return;
 
-      const childrenNames = this.scheduleData.selectedChildren.map(child => child.name).join(', ');
+      const childrenNames = this.scheduleData.selectedChildren.map((child) => child.name).join(', ');
       const childCount = this.scheduleData.selectedChildren.length;
       const childText = childCount === 1 ? 'child' : 'children';
 
-      
-      const notificationData = {
-        type: 'schedule_assignment',
-        title: 'New Schedule Assignment',
-        message: `You have been scheduled to pick up ${childCount} ${childText} (${childrenNames}) on ${this.scheduleData.selectedDays.join(', ')} at ${this.scheduleData.selectedTime}`,
-        recipientId: this.scheduleData.fetcherUID, 
-        senderId: currentUser.uid, 
-        senderName: currentUser.fullName || currentUser.email || 'Family Member',
-        familyName: this.scheduleData.familyName,
-        scheduleDate: this.scheduleData.selectedDate,
-        scheduleTime: this.scheduleData.selectedTime,
-        scheduleDays: this.scheduleData.selectedDays.join(', '),
-        childrenNames: childrenNames,
-        childrenCount: childCount,
-        isRead: false,
-        createdAt: serverTimestamp()
-      };
-
-      
       const notificationsCollection = collection(this.firestore, 'Notifications');
-      await addDoc(notificationsCollection, notificationData);
+      for (const g of fetcherGroups) {
+        const days = Array.from(g.days).sort();
+        const dates = Array.from(g.dates).sort();
+        const dayLabel = days.join(', ');
+        const datePart = dates.join(', ');
+        const firstDate = dates[0] || '';
 
-      console.log('Schedule notification sent to:', this.scheduleData.fetcherName);
+        const message = `You have been scheduled to pick up ${childCount} ${childText} (${childrenNames}) on ${dayLabel} at ${this.scheduleData.selectedTime}. Dates: ${datePart}.`;
+
+        const notificationData = {
+          type: 'schedule_assignment',
+          title: 'New Schedule Assignment',
+          message,
+          recipientId: g.fetcherUid,
+          senderId: currentUser.uid,
+          senderName: currentUser.fullName || currentUser.email || 'Family Member',
+          familyName: this.scheduleData.familyName,
+          scheduleDate: firstDate || this.scheduleData.selectedDate,
+          scheduleTime: this.scheduleData.selectedTime,
+          scheduleDays: dayLabel,
+          scheduleDatesList: dates,
+          childrenNames: childrenNames,
+          childrenCount: childCount,
+          isRead: false,
+          createdAt: serverTimestamp(),
+        };
+
+        await addDoc(notificationsCollection, notificationData);
+      }
     } catch (error) {
       console.error('Error sending notification:', error);
     }
@@ -382,7 +683,7 @@ export class SchedulingPage implements OnInit {
     const toast = await this.toastController.create({
       message: message,
       duration: 3000,
-      position: 'bottom'
+      position: 'bottom',
     });
     await toast.present();
   }

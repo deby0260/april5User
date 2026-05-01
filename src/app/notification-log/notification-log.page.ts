@@ -304,14 +304,16 @@ export class NotificationLogPage implements OnInit {
   }
 
   async showNotificationDetails(notification: PickupNotification) {
+    const lines = [
+      `Child: ${notification.childName || ''}`.trim(),
+      `Picked up by: ${notification.completedBy || ''}`.trim(),
+      `Time: ${notification.time || ''}`.trim(),
+      notification.date ? `Date: ${notification.date}` : '',
+    ].filter(Boolean);
+
     const alert = await this.alertController.create({
       header: 'Pickup Details',
-      message: `
-        <strong>Child:</strong> ${notification.childName}<br>
-        <strong>Picked up by:</strong> ${notification.completedBy}<br>
-        <strong>Time:</strong> ${notification.time}<br>
-        ${notification.date ? `<strong>Date:</strong> ${notification.date}<br>` : ''}
-      `,
+      message: lines.join('\n'),
       buttons: ['OK']
     });
 

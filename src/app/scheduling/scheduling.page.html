@@ -23,23 +23,26 @@
       </div>
 
       <div class="input-group" *ngIf="canManageSchedule">
-        <label class="input-label">Fetcher&apos;s Name</label>
+        <label class="input-label">1. Who will pick up?</label>
         <ion-select
-          placeholder="Select Family Members"
-          [value]="scheduleData.fetcherName ? getSelectedMember() : null"
+          placeholder="Select parent or companion"
+          [value]="scheduleData.fetcherUID || null"
           (ionChange)="onFetcherSelected($event)"
           class="family-select"
           interface="popover">
           <ion-select-option
             *ngFor="let member of getAvailableFetchers()"
-            [value]="member">
+            [value]="member.uid">
             {{ member.name }} ({{ member.role | titlecase }})
           </ion-select-option>
         </ion-select>
+        <ion-note color="medium" class="step-hint">
+          Choose one person, then pick which days they cover (e.g. Mon–Wed). For someone else (e.g. Thu–Fri), save and set up another schedule.
+        </ion-note>
       </div>
 
-      <div class="input-group" *ngIf="canManageSchedule">
-        <label class="input-label">Select Day (Choose One)</label>
+      <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID">
+        <label class="input-label">2. Which days does {{ scheduleData.fetcherName }} pick up?</label>
         <div class="days-selector">
           <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Monday')" (click)="toggleDay('Monday')">Mon</div>
           <div class="day-button" [class.selected]="scheduleData.selectedDays.includes('Tuesday')" (click)="toggleDay('Tuesday')">Tue</div>
@@ -52,35 +55,40 @@
         <div class="day-selection-note">
           <ion-note color="medium">
             <ion-icon name="information-circle-outline"></ion-icon>
-            Select only one day. Calendar will show only dates for that day.
+            The calendar below only allows these weekdays. Tap a date to set the week; all selected days in that week are saved.
           </ion-note>
         </div>
       </div>
 
-      <div class="input-group" *ngIf="canManageSchedule">
-        <label class="input-label">Date</label>
-        <div class="date-info" *ngIf="scheduleData.selectedDays.length > 0">
+      <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID && scheduleData.selectedDays.length > 0">
+        <label class="input-label">3. Pick a date</label>
+        <div class="date-info">
           <ion-chip color="primary" class="info-chip">
             <ion-icon name="information-circle"></ion-icon>
-            <ion-label>Only {{ scheduleData.selectedDays[0] }} dates are available</ion-label>
+            <ion-label>Only the selected weekdays in the same week as your chosen date are tinted; tap another allowed day to move the week</ion-label>
           </ion-chip>
         </div>
-        <ion-datetime
-          presentation="date"
-          [min]="minDate"
-          [max]="maxDate"
-          [isDateEnabled]="isDateEnabled"
-          [(ngModel)]="scheduleData.selectedDate"
-          (ionChange)="onDateChange($event)"
-          class="custom-datetime">
-          <ion-button fill="outline" class="date-button" slot="trigger">
-            <ion-icon name="calendar-outline" slot="start"></ion-icon>
-            {{ getFormattedDate() }}
-          </ion-button>
-        </ion-datetime>
+        <div class="datetime-mount">
+          <ng-container *ngFor="let shell of calendarShells; trackBy: trackCalendarShell">
+            <ion-datetime
+              presentation="date"
+              [min]="minDate"
+              [max]="maxDate"
+              [isDateEnabled]="isDateEnabled"
+              [highlightedDates]="highlightMatchingWeekdays"
+              [value]="selectedDateIonValue"
+              (ionChange)="onDateChange($event)"
+              class="custom-datetime">
+              <ion-button fill="outline" class="date-button" slot="trigger">
+                <ion-icon name="calendar-outline" slot="start"></ion-icon>
+                {{ getFormattedDate() }}
+              </ion-button>
+            </ion-datetime>
+          </ng-container>
+        </div>
       </div>
 
-      <div class="input-group" *ngIf="canManageSchedule">
+      <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID">
         <label class="input-label">Time</label>
         <div class="time-input-container">
           <ion-input type="time" [(ngModel)]="scheduleData.selectedTime" class="time-input"></ion-input>
@@ -88,7 +96,7 @@
         </div>
       </div>
 
-      <div class="input-group" *ngIf="canManageSchedule && children.length > 0">
+      <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID && children.length > 0">
         <label class="input-label">Select Children to be picked up</label>
 
         <div class="selection-controls">
@@ -121,7 +129,7 @@
         </div>
       </div>
 
-      <div class="action-section" *ngIf="canManageSchedule">
+      <div class="action-section" *ngIf="canManageSchedule && scheduleData.fetcherUID">
         <ion-button expand="block" class="done-button" (click)="saveSchedule()">Done</ion-button>
       </div>
     </div>

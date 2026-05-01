@@ -22,9 +22,11 @@ interface ScheduleItem {
   childGrade: string;
   familyName: string;
   createdAt: any;
-  status?: string; 
+  status?: string;
   completedAt?: any;
   completedBy?: string;
+  /** Extra Firestore docs merged into this row (same pickup); completed together */
+  duplicateDocIds?: string[];
 }
 
 @Component({
@@ -82,16 +84,18 @@ export class ViewSchedulePage implements OnInit {
       console.log('🕐 Checking for overdue schedules...');
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes(); 
-      const today = now.toISOString().split('T')[0]; 
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+        now.getDate()
+      ).padStart(2, '0')}`;
       const schedulesToComplete = [];
 
       for (const schedule of this.schedules) {
         
-        const scheduleDate = new Date(schedule.date).toISOString().split('T')[0];
+        const scheduleDate = this.toLocalYmd(schedule.date);
 
         if (scheduleDate === today) {
           
-          const scheduleTimeMinutes = this.parseTimeToMinutes(schedule.time);
+          const scheduleTimeMinutes = this.parseScheduleTimeToMinutesSafe(schedule.time);
 
           
           if (currentTime > scheduleTimeMinutes) {
@@ -114,7 +118,9 @@ export class ViewSchedulePage implements OnInit {
   
   parseTimeToMinutes(timeString: string): number {
     try {
-      const [time, period] = timeString.split(' ');
+      const raw = timeString.trim().split(/\s+/);
+      const time = raw[0];
+      const period = (raw[1] || '').toUpperCase();
       const [hours, minutes] = time.split(':').map(Number);
 
       let totalHours = hours;
@@ -131,6 +137,126 @@ export class ViewSchedulePage implements OnInit {
     }
   }
 
+  /**
+   * Minutes from midnight for sorting (fractional if seconds present).
+   * Handles 24h HH:mm / HH:mm:ss from ion-input and "h:mm AM/PM" (any case, optional space).
+   */
+  private parseScheduleTimeToMinutesSafe(timeString: string): number {
+    if (!timeString) return 0;
+    const t = timeString.trim();
+    if (!t) return 0;
+
+    const ampm = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)$/);
+    if (ampm) {
+      let h = parseInt(ampm[1], 10);
+      const m = parseInt(ampm[2], 10);
+      const s = ampm[3] != null ? parseInt(ampm[3], 10) : 0;
+      const ap = ampm[4].toUpperCase();
+      if (ap === 'PM' && h !== 12) {
+        h += 12;
+      }
+      if (ap === 'AM' && h === 12) {
+        h = 0;
+      }
+      return h * 60 + m + s / 60;
+    }
+
+    const h24 = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (h24) {
+      const h = parseInt(h24[1], 10);
+      const m = parseInt(h24[2], 10);
+      const s = h24[3] != null ? parseInt(h24[3], 10) : 0;
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        return h * 60 + m + s / 60;
+      }
+    }
+
+    if (/\b(AM|PM)\b/i.test(t)) {
+      return this.parseTimeToMinutes(t);
+    }
+    return 0;
+  }
+
+  private toLocalYmd(dateStr: string): string {
+    const parts = dateStr.split('-').map((n) => parseInt(n, 10));
+    if (parts.length === 3 && !parts.some((n) => Number.isNaN(n))) {
+      const [y, m, d] = parts;
+      const mm = String(m).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      return `${y}-${mm}-${dd}`;
+    }
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+  }
+
+  private scheduleSortTimestamp(s: ScheduleItem): number {
+    const parts = s.date.split('-').map((n) => parseInt(n, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      return 0;
+    }
+    const [y, mo, d] = parts;
+    const dayStart = new Date(y, mo - 1, d).getTime();
+    return dayStart + this.parseScheduleTimeToMinutesSafe(s.time) * 60 * 1000;
+  }
+
+  /** Earliest pickup first: date, then clock time — never creation / Firestore order */
+  private compareSchedulesChronologically(a: ScheduleItem, b: ScheduleItem): number {
+    const ta = this.scheduleSortTimestamp(a);
+    const tb = this.scheduleSortTimestamp(b);
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    const minDiff =
+      this.parseScheduleTimeToMinutesSafe(a.time) - this.parseScheduleTimeToMinutesSafe(b.time);
+    if (minDiff !== 0) {
+      return minDiff;
+    }
+    return String(a.time).localeCompare(String(b.time));
+  }
+
+  private createdAtMs(v: any): number {
+    if (v == null) return 0;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    if (typeof v.seconds === 'number') return v.seconds * 1000;
+    return 0;
+  }
+
+  private scheduleDedupeKey(s: ScheduleItem): string {
+    return `${this.toLocalYmd(s.date)}|${String(s.time || '').trim()}|${String(s.childName || '').trim()}|${s.fetcherUID}|${String(s.days || '').trim()}`;
+  }
+
+  /** One row per logical pickup; duplicate Firestore writes collapse here */
+  private mergeDuplicateSchedules(items: ScheduleItem[]): ScheduleItem[] {
+    const groups = new Map<string, ScheduleItem[]>();
+    for (const s of items) {
+      const k = this.scheduleDedupeKey(s);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(s);
+    }
+    const out: ScheduleItem[] = [];
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        out.push(group[0]);
+        continue;
+      }
+      group.sort((a, b) => this.createdAtMs(b.createdAt) - this.createdAtMs(a.createdAt));
+      const [primary, ...rest] = group;
+      out.push({
+        ...primary,
+        duplicateDocIds: rest.map((r) => r.id),
+      });
+    }
+    return out;
+  }
+
+  private allScheduleDocIds(s: ScheduleItem): string[] {
+    return [s.id, ...(s.duplicateDocIds || [])];
+  }
+
   async automaticallyCompleteSchedule(schedule: ScheduleItem) {
     try {
       console.log('🤖 Automatically completing schedule:', schedule.childName);
@@ -140,12 +266,15 @@ export class ViewSchedulePage implements OnInit {
       const completedBy = schedule.fetcherName || 'Unknown Fetcher';
 
       
-      const scheduleDoc = doc(this.firestore, 'Schedules', schedule.id);
-      await updateDoc(scheduleDoc, {
-        'Status': 'completed',
-        'Completed At': serverTimestamp(),
-        'Completed By': completedBy
-      });
+      const docIds = this.allScheduleDocIds(schedule);
+      for (const docId of docIds) {
+        const scheduleDoc = doc(this.firestore, 'Schedules', docId);
+        await updateDoc(scheduleDoc, {
+          'Status': 'completed',
+          'Completed At': serverTimestamp(),
+          'Completed By': completedBy
+        });
+      }
 
       
       await this.createAutomaticPickupNotificationLog(schedule, completedBy);
@@ -233,12 +362,10 @@ export class ViewSchedulePage implements OnInit {
         }
       });
 
-      
-      this.schedules.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateB.getTime() - dateA.getTime();
-      });
+      this.schedules = this.mergeDuplicateSchedules(this.schedules);
+
+      // Soonest pickup first: calendar date, then time of day (not createdAt / doc order)
+      this.schedules.sort((a, b) => this.compareSchedulesChronologically(a, b));
 
       console.log(`Loaded ${this.schedules.length} schedules for family: ${family.name}`);
       console.log('Schedules data:', this.schedules);
@@ -254,6 +381,16 @@ export class ViewSchedulePage implements OnInit {
 
   getFormattedDate(dateString: string): string {
     if (!dateString) return '';
+
+    const parts = dateString.split('-').map(Number);
+    if (parts.length === 3 && !parts.some(Number.isNaN)) {
+      const [y, m, d] = parts;
+      return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
 
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -294,14 +431,17 @@ export class ViewSchedulePage implements OnInit {
       }
 
       
-      console.log('📝 Updating schedule in Firestore:', schedule.id);
-      const scheduleDoc = doc(this.firestore, 'Schedules', schedule.id);
-      await updateDoc(scheduleDoc, {
-        'Status': 'completed',
-        'Completed At': serverTimestamp(),
-        'Completed By': currentUser.fullName || currentUser.email || 'Unknown User'
-      });
-      console.log('✅ Schedule updated in Firestore');
+      const docIds = this.allScheduleDocIds(schedule);
+      console.log('📝 Updating schedule doc(s) in Firestore:', docIds.join(', '));
+      for (const docId of docIds) {
+        const scheduleDoc = doc(this.firestore, 'Schedules', docId);
+        await updateDoc(scheduleDoc, {
+          'Status': 'completed',
+          'Completed At': serverTimestamp(),
+          'Completed By': currentUser.fullName || currentUser.email || 'Unknown User'
+        });
+      }
+      console.log('✅ Schedule(s) updated in Firestore');
 
       
       await this.sendCompletionNotification(schedule, currentUser);
@@ -542,11 +682,17 @@ export class ViewSchedulePage implements OnInit {
       return false;
     }
 
-    const scheduleDate = new Date(schedule.date);
+    const ymd = this.toLocalYmd(schedule.date);
+    const parts = ymd.split('-').map((n) => parseInt(n, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      return false;
+    }
+    const [y, m, d] = parts;
+    const scheduleDay = new Date(y, m - 1, d);
     const today = new Date();
-    today.setHours(23, 59, 59, 999); 
+    today.setHours(23, 59, 59, 999);
 
-    return scheduleDate <= today;
+    return scheduleDay <= today;
   }
 
   goBack() {
