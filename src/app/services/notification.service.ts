@@ -5,6 +5,7 @@ import { LocalNotifications, LocalNotificationSchema } from '@capacitor/local-no
 import { Capacitor } from '@capacitor/core';
 import { AuthService } from './auth';
 import { Firestore, collection, doc, setDoc, updateDoc, getDoc } from '@angular/fire/firestore';
+import { environment } from '../../environments/environment';
 
 export interface NotificationData {
   id?: string;
@@ -46,7 +47,13 @@ export class NotificationService {
   }
 
   private async initializePushNotifications() {
-    
+    if (!environment.enableCapacitorPushRegistration) {
+      console.warn(
+        'Capacitor push (FCM) skipped: set environment.enableCapacitorPushRegistration to true after adding android/app/google-services.json'
+      );
+      return;
+    }
+
     const permission = await PushNotifications.requestPermissions();
     
     if (permission.receive === 'granted') {

@@ -1,5 +1,10 @@
 export const environment = {
   production: true,
+  /**
+   * Set true only after `android/app/google-services.json` exists and matches
+   * your `applicationId` (e.g. io.ionic.starter).
+   */
+  enableCapacitorPushRegistration: false,
   firebase: {
     apiKey: "AIzaSyBczGIrG5fC0sUqmd0-dMyohMEpI0JquEM",
     authDomain: "fetchsafe2.firebaseapp.com",

@@ -4,6 +4,13 @@
 
 export const environment = {
   production: false,
+  /**
+   * `@capacitor/push-notifications` uses Firebase Messaging on device.
+   * Without `android/app/google-services.json` (and a matching Firebase Android app),
+   * calling register() crashes the app. Set to true only after that file is in place
+   * and you run `npx cap sync android`.
+   */
+  enableCapacitorPushRegistration: false,
   firebase: {
     apiKey: "AIzaSyBczGIrG5fC0sUqmd0-dMyohMEpI0JquEM",
     authDomain: "fetchsafe2.firebaseapp.com",
