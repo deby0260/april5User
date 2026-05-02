@@ -188,8 +188,4 @@ export class SettingsPage implements OnInit {
     });
     await toast.present();
   }
-
-  navigateToNotifications() {
-    this.router.navigate(['/notifications']);
-  }
 }

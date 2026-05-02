@@ -17,13 +17,22 @@
         </ion-input>
       </div>
 
-      <div class="input-container">
+      <div class="input-container password-input-container">
         <ion-input
-          type="password"
+          [type]="showPassword ? 'text' : 'password'"
           placeholder="Password"
           [(ngModel)]="password"
-          class="custom-input"
+          class="custom-input password-field"
           fill="solid">
+          <ion-button
+            slot="end"
+            fill="clear"
+            type="button"
+            class="password-toggle-btn"
+            (click)="togglePasswordVisibility($event)"
+            [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'">
+            <ion-icon slot="icon-only" [name]="showPassword ? 'eye-off-outline' : 'eye-outline'"></ion-icon>
+          </ion-button>
         </ion-input>
       </div>
 

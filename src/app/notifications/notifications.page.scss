@@ -20,33 +20,6 @@
   }
 }
 
-.header-section {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .back-button {
-    --color: #333;
-    margin-right: 16px;
-    --padding-start: 0;
-    --padding-end: 0;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-
-    /* image-only logo */
-    img {
-      width: 160px;
-      height: auto;
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-  }
-}
-
 .title-section {
   text-align: center;
   margin-bottom: 30px;
@@ -97,6 +70,7 @@
         &.join_approved{ color: #34c759; }
         &.join_denied  { color: #ff3b30; }
         &.password_change_required { color: #ff9500; }
+        &.admin_announcement { color: #5856d6; }
       }
     }
 
@@ -129,6 +103,15 @@
         color: #666;
         line-height: 1.4;
         margin: 0;
+      }
+
+      .announcement-hint {
+        font-size: 11px;
+        color: #5856d6;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 6px 0 0 0;
       }
 
       .action-hint {

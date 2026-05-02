@@ -1,0 +1,79 @@
+/* Keep in sync with global.scss --fetchsafe-shell-header-bar + --fetchsafe-shell-header-gap */
+:host {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10045;
+  pointer-events: none;
+}
+
+.shell-header {
+  pointer-events: auto;
+  background: #fffdfd;
+  border: none;
+  box-shadow: none;
+  padding-top: env(safe-area-inset-top, 0px);
+
+  &__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px 12px;
+    min-height: 52px;
+    box-sizing: border-box;
+  }
+
+  &--sub .shell-header__inner {
+    justify-content: flex-start;
+  }
+
+  &--sub .shell-header__bell {
+    margin-left: auto;
+  }
+
+  &__back {
+    --color: #333;
+    --padding-start: 0;
+    --padding-end: 0;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  &__logo {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: 0;
+
+    img {
+      width: 160px;
+      height: auto;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  }
+
+  &__bell {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+    color: #129cae;
+    transition: color 0.2s ease;
+
+    ion-icon {
+      font-size: 26px;
+    }
+
+    &:hover {
+      color: #0e7ec9;
+    }
+  }
+}

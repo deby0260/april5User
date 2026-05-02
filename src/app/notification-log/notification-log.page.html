@@ -1,16 +1,3 @@
-<ion-header [translucent]="true" class="custom-header">
-  <ion-toolbar>
-    <div class="header-content">
-      <div class="logo">
-        <img src="assets/logo2.png" alt="FetchSafe logo" />
-      </div>
-      <div class="notification-icon" (click)="navigateToNotifications()">
-        <ion-icon name="notifications-outline"></ion-icon>
-      </div>
-    </div>
-  </ion-toolbar>
-</ion-header>
-
 <ion-content [fullscreen]="true" class="notification-log-page" [scrollY]="true">
   <div class="page-container">
     <div *ngIf="isLoading" class="loading-section">
@@ -81,5 +68,23 @@
   </div>
 </ion-content>
 
-<app-bottom-navigation></app-bottom-navigation>
-  
+<ion-modal
+  [isOpen]="detailModalOpen"
+  [backdropDismiss]="true"
+  cssClass="notification-log-detail-modal"
+  (didDismiss)="onDetailModalDismiss()">
+  <ng-template>
+    <ion-header class="notification-log-detail-modal__header">
+      <ion-toolbar>
+        <ion-title class="notification-log-detail-modal__title">{{ detailNotification?.title || 'Details' }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="clear" (click)="closeDetailModal()">Done</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content class="notification-log-detail-modal__body ion-padding">
+      <p class="notification-log-detail-modal__time">{{ detailTimestamp(detailNotification) }}</p>
+      <p class="notification-log-detail-modal__text">{{ detailBody }}</p>
+    </ion-content>
+  </ng-template>
+</ion-modal>

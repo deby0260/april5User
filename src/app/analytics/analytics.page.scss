@@ -7,32 +7,6 @@
   min-height: calc(100vh - 60px);
 }
 
-.header-section {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .back-button {
-    --color: #129CAE;
-    margin-right: 16px;
-    --padding-start: 0;
-    --padding-end: 0;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-
-    img {
-      width: 160px;
-      height: auto;
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-  }
-}
-
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

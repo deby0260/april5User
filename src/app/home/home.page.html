@@ -1,15 +1,5 @@
 <ion-content [fullscreen]="true" class="home-page" [scrollY]="true">
   <div class="home-container">
-    <div class="header-section">
-      <div class="logo">
-        <img src="assets/logo2.png" alt="FetchSafe logo" />
-      </div>
-
-      <div class="notification-icon" (click)="navigateToNotifications()">
-        <ion-icon name="notifications-outline"></ion-icon>
-      </div>
-    </div>
-
     <div class="weather-section" *ngIf="weatherData">
       <div class="weather-info">
         <ion-icon [name]="getWeatherIcon()" class="weather-icon"></ion-icon>
@@ -148,6 +138,4 @@
       </div>
     </div>
   </div>
-
-  <app-bottom-navigation></app-bottom-navigation>
 </ion-content>

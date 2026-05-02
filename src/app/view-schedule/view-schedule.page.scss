@@ -8,32 +8,6 @@
   min-height: calc(100vh - 60px);
 }
 
-.header-section {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .back-button {
-    --color: #129CAE;
-    margin-right: 16px;
-    --padding-start: 0;
-    --padding-end: 0;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-
-    img {
-      width: 160px;
-      height: auto;
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-  }
-}
-
 .title-section {
   text-align: center;
   margin-bottom: 30px;
@@ -195,6 +169,10 @@
     opacity: 0.8;
   }
 
+  &.editing {
+    box-shadow: 0 0 0 2px rgba(32, 178, 170, 0.35);
+  }
+
   .schedule-header {
     display: flex;
     justify-content: space-between;
@@ -236,6 +214,21 @@
         font-size: 14px;
         font-weight: 600;
         color: #20b2aa;
+      }
+
+      &.time-info-edit {
+        align-items: center;
+        gap: 4px;
+
+        .inline-time-input {
+          --background: transparent;
+          --padding-start: 0;
+          --padding-end: 0;
+          --color: #20b2aa;
+          min-width: 118px;
+          font-size: 14px;
+          font-weight: 600;
+        }
       }
     }
 
@@ -285,6 +278,8 @@
       .completion-details {
         display: flex;
         flex-direction: column;
+        flex: 1;
+        min-width: 0;
 
         .fetcher-label,
         .child-label,
@@ -311,6 +306,34 @@
         color: #20b2aa;
         font-weight: 600;
       }
+
+      .inline-edit-select {
+        width: 100%;
+        margin-top: 4px;
+        --background: #f0faf9;
+        --border-radius: 10px;
+        --border-color: #20b2aa;
+        --border-width: 1px;
+        --border-style: solid;
+        --padding-start: 12px;
+        --padding-end: 12px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+    }
+
+    .child-info .inline-edit-select {
+      width: 100%;
+      margin-top: 4px;
+      --background: #f0faf9;
+      --border-radius: 10px;
+      --border-color: #20b2aa;
+      --border-width: 1px;
+      --border-style: solid;
+      --padding-start: 12px;
+      --padding-end: 12px;
+      font-size: 14px;
+      font-weight: 500;
     }
 
     .completion-info {
@@ -325,12 +348,25 @@
     }
   }
 
+  &.editing .schedule-body {
+    .fetcher-info,
+    .child-info {
+      align-items: flex-start;
+    }
+  }
+
   .schedule-actions {
     margin-top: 16px;
     padding-top: 16px;
     border-top: 1px solid #f0f0f0;
-    display: flex;
-    justify-content: flex-end;
+
+    .schedule-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+    }
 
     ion-button {
       --border-radius: 20px;

@@ -1,11 +1,5 @@
 <ion-content [fullscreen]="true" class="created-family-page" [scrollY]="true">
   <div class="page-container">
-    <div class="header-section">
-      <div class="logo">
-        <img src="assets/logo2.png" alt="FetchSafe logo" />
-      </div>
-    </div>
-
     <div *ngIf="isLoading" class="loading-section">
       <ion-spinner name="crescent"></ion-spinner>
       <p>Loading family data...</p>
@@ -109,5 +103,3 @@
 
   </div>
 </ion-content>
-
-<app-bottom-navigation></app-bottom-navigation>

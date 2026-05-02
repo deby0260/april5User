@@ -8,32 +8,6 @@
   padding-bottom: 100px; // Space for bottom navigation
 }
 
-.header-section {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .back-button {
-    --color: #129CAE;
-    margin-right: 16px;
-    --padding-start: 0;
-    --padding-end: 0;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-
-    img {
-      width: 160px;
-      height: auto;
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-  }
-}
-
 .title-section {
   text-align: center;
   margin-bottom: 30px;

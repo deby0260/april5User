@@ -8,39 +8,6 @@
   background: white;
 }
 
-.header-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
-
-  .logo {
-    display: flex;
-    align-items: center;
-
-    img {
-      width: 160px;
-      height: auto;
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-  }
-
-  .notification-icon {
-    font-size: 24px;
-    color: #129CAE;
-    cursor: pointer;
-    transition: color 0.3s ease;
-
-    &:hover {
-      color: #0e7ec9;
-    }
-  }
-}
-
 .title-section {
   padding: 20px;
   background: white;

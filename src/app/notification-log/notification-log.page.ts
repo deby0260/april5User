@@ -4,7 +4,7 @@ import { Firestore, collection, query, where, getDocs, doc, deleteDoc, addDoc } 
 import { AuthService } from '../services/auth';
 import { FamilyService } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
-import { LoadingController, ToastController, AlertController } from '@ionic/angular';
+import { LoadingController, ToastController } from '@ionic/angular';
 
 interface PickupNotification {
   id: string;
@@ -18,6 +18,8 @@ interface PickupNotification {
   scheduleTime?: string;
   createdAt: any;
   type: string;
+  /** Full body when stored on the doc (e.g. announcements, panic copy) */
+  message?: string;
 }
 
 @Component({
@@ -32,6 +34,10 @@ export class NotificationLogPage implements OnInit {
   olderNotifications: PickupNotification[] = [];
   isLoading: boolean = false;
 
+  detailModalOpen = false;
+  detailNotification: PickupNotification | null = null;
+  detailBody = '';
+
   constructor(
     private router: Router,
     private firestore: Firestore,
@@ -39,8 +45,7 @@ export class NotificationLogPage implements OnInit {
     private familyService: FamilyService,
     private panicService: PanicService,
     private loadingController: LoadingController,
-    private toastController: ToastController,
-    private alertController: AlertController
+    private toastController: ToastController
   ) { }
 
   async ngOnInit() {
@@ -176,7 +181,8 @@ export class NotificationLogPage implements OnInit {
           completedBy: completedBy,
           scheduleTime: scheduleTime,
           createdAt: data['createdAt'],
-          type: data['type']
+          type: data['type'],
+          message: typeof data['message'] === 'string' ? data['message'] : undefined,
         };
         console.log('✅ Created notification object:', notification);
         allNotifications.push(notification);
@@ -288,10 +294,6 @@ export class NotificationLogPage implements OnInit {
     this.router.navigate(['/settings']);
   }
 
-  navigateToNotifications() {
-    this.router.navigate(['/notifications']);
-  }
-
   async triggerPanicAlert() {
     await this.panicService.triggerPanicAlert();
   }
@@ -299,24 +301,56 @@ export class NotificationLogPage implements OnInit {
 
 
   onNotificationClick(notification: PickupNotification) {
-  
-    this.showNotificationDetails(notification);
+    this.detailNotification = notification;
+    this.detailBody = this.buildDetailBody(notification);
+    this.detailModalOpen = true;
   }
 
-  async showNotificationDetails(notification: PickupNotification) {
+  closeDetailModal(): void {
+    this.detailModalOpen = false;
+  }
+
+  onDetailModalDismiss(): void {
+    this.detailModalOpen = false;
+    this.detailNotification = null;
+    this.detailBody = '';
+  }
+
+  detailTimestamp(n: PickupNotification | null): string {
+    if (!n?.createdAt) {
+      return n?.time || '';
+    }
+    try {
+      const d = n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt);
+      if (Number.isNaN(d.getTime())) {
+        return n.time || '';
+      }
+      return d.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch {
+      return n.time || '';
+    }
+  }
+
+  private buildDetailBody(n: PickupNotification): string {
+    const raw = (n.message || '').trim();
+    if (raw) {
+      return raw;
+    }
     const lines = [
-      `Child: ${notification.childName || ''}`.trim(),
-      `Picked up by: ${notification.completedBy || ''}`.trim(),
-      `Time: ${notification.time || ''}`.trim(),
-      notification.date ? `Date: ${notification.date}` : '',
+      `Child: ${n.childName || ''}`.trim(),
+      `Picked up by: ${n.completedBy || ''}`.trim(),
+      n.scheduleTime ? `Scheduled time: ${n.scheduleTime}` : '',
+      `Recorded: ${n.time || ''}`.trim(),
+      n.date ? `Date: ${n.date}` : '',
+      (n.subtitle || '').trim() ? n.subtitle : '',
     ].filter(Boolean);
-
-    const alert = await this.alertController.create({
-      header: 'Pickup Details',
-      message: lines.join('\n'),
-      buttons: ['OK']
-    });
-
-    await alert.present();
+    return lines.join('\n\n');
   }
 }

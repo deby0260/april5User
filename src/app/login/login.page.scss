@@ -37,6 +37,18 @@
     .input-container {
       margin-bottom: 20px;
 
+      &.password-input-container .custom-input.password-field {
+        --padding-end: 4px;
+      }
+
+      .password-toggle-btn {
+        --color: white;
+        --padding-start: 6px;
+        --padding-end: 10px;
+        margin: 0;
+        height: 44px;
+      }
+
       .custom-input {
         --background: var(--brand) !important;
         --color: white !important;
@@ -47,7 +59,6 @@
         height: 50px;
         font-size: 16px;
         font-weight: 500;
-        box-shadow: 0 4px 12px rgba(18, 156, 174, 0.3); /* #129CAE @ 0.3 */
         border-radius: 25px;
         background: var(--brand) !important;
 
@@ -89,26 +100,53 @@
       }
     }
 
+    /* Pill + shadow live on the host; inner ::part(native) must match or default white peeks past rounded corners */
     .login-button {
       --background: var(--brand);
+      --background-activated: #0f7a8a;
+      --background-hover: #148a9d;
+      --background-focused: var(--brand);
       --border-radius: 25px;
+      --color: white;
+      --box-shadow: none;
+      --ripple-color: rgba(255, 255, 255, 0.25);
       height: 50px;
       font-size: 16px;
       font-weight: bold;
       margin-bottom: 16px;
-      --color: white;
-      box-shadow: 0 4px 12px rgba(18, 156, 174, 0.4); /* #129CAE @ 0.4 */
+      overflow: hidden;
+    }
+
+    .login-button::part(native) {
+      border-radius: 25px;
+      background: var(--brand);
+      box-shadow: none;
     }
 
     .register-button {
+      /* Outline buttons default to white fill; use page tint so nothing “boxes” behind the pill */
+      --background: transparent;
+      --background-activated: rgba(18, 156, 174, 0.12);
+      --background-hover: rgba(18, 156, 174, 0.08);
+      --background-focused: transparent;
       --border-color: var(--brand);
+      --border-width: 2px;
+      --border-style: solid;
       --color: var(--brand);
       --border-radius: 25px;
+      --box-shadow: none;
+      --ripple-color: rgba(18, 156, 174, 0.2);
       height: 50px;
       font-size: 16px;
       font-weight: bold;
       margin-bottom: 16px;
-      box-shadow: 0 2px 8px rgba(18, 156, 174, 0.2); /* #129CAE @ 0.2 */
+      overflow: hidden;
+    }
+
+    .register-button::part(native) {
+      border-radius: 25px;
+      background: transparent;
+      box-shadow: none;
     }
 
     .back-button {

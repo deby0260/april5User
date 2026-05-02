@@ -34,8 +34,8 @@ const routes: Routes = [
   },
   {
     path: 'creating-family',
-    loadChildren: () => import('./creating-family/creating-family.module').then( m => m.CreatingFamilyPageModule),
-    canActivate: [authGuard]
+    redirectTo: 'register-create-family',
+    pathMatch: 'full'
   },
   {
     path: 'created-family',

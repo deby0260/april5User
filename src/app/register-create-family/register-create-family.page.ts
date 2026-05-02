@@ -335,10 +335,6 @@ export class RegisterCreateFamilyPage implements OnInit {
     await alert.present();
   }
 
-  navigateToNotifications() {
-    this.router.navigate(['/notification-log']);
-  }
-
   formatDate(dateValue: any): string {
     if (!dateValue) return 'Unknown';
 

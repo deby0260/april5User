@@ -1,4 +1,6 @@
-<ion-app>
+<ion-app [class.app-shell-chrome]="showAppChrome">
   <app-emergency-banner></app-emergency-banner>
+  <app-shell-header *ngIf="showAppChrome" [layout]="shellHeaderLayout"></app-shell-header>
   <ion-router-outlet></ion-router-outlet>
+  <app-bottom-navigation *ngIf="showAppChrome"></app-bottom-navigation>
 </ion-app>

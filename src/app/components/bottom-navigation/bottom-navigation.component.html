@@ -39,7 +39,7 @@
     </div>
 
     <div class="nav-item"
-         [class.active]="isCurrentRoute('/notification-log')"
+         [class.active]="isCurrentRoute('/notification-log') || isCurrentRoute('/notifications')"
          [class.disabled-nav]="!userHasFamily"
          (click)="navigateToMenu()">
       <ion-icon name="notifications"></ion-icon>

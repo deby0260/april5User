@@ -1,12 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
-import { Firestore, collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp } from '@angular/fire/firestore';
+import { Firestore, collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
-import { FamilyService } from '../services/family.service';
+import { FamilyService, FamilyMember } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
-import { LoadingController, ToastController } from '@ionic/angular';
+import { LoadingController, ToastController, AlertController } from '@ionic/angular';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
 
 interface ScheduleItem {
@@ -40,6 +40,15 @@ export class ViewSchedulePage implements OnInit {
   isLoading: boolean = true;
   familyName: string = '';
   userRole: UserRole | null = null;
+  /** Pickers for inline edit (parents/owners only) */
+  familyMembers: FamilyMember[] = [];
+  children: any[] = [];
+  editingScheduleId: string | null = null;
+  editFetcherUID = '';
+  editChildName = '';
+  /** HH:mm for ion-input type="time" */
+  editTime = '';
+  savingInlineEdit = false;
   private autoCompleteInterval: any;
 
   constructor(
@@ -52,6 +61,7 @@ export class ViewSchedulePage implements OnInit {
     private notificationService: NotificationService,
     private loadingController: LoadingController,
     private toastController: ToastController,
+    private alertController: AlertController,
     private roleAccessService: RoleAccessService
   ) { }
 
@@ -295,24 +305,17 @@ export class ViewSchedulePage implements OnInit {
   }
 
   async loadScheduleData() {
-    const loading = await this.loadingController.create({
-      message: 'Loading schedules...'
-    });
-    await loading.present();
-
+    this.isLoading = true;
     try {
-      this.isLoading = true;
       const currentUser = this.authService.getCurrentUser();
 
       if (!currentUser) {
-        await loading.dismiss();
         return;
       }
 
       
       const family = await this.familyService.getUserFamily();
       if (!family) {
-        await loading.dismiss();
         return;
       }
 
@@ -367,6 +370,8 @@ export class ViewSchedulePage implements OnInit {
       // Soonest pickup first: calendar date, then time of day (not createdAt / doc order)
       this.schedules.sort((a, b) => this.compareSchedulesChronologically(a, b));
 
+      await this.loadFamilyPickersForEdit();
+
       console.log(`Loaded ${this.schedules.length} schedules for family: ${family.name}`);
       console.log('Schedules data:', this.schedules);
       console.log('Family name used for query:', family.name);
@@ -375,7 +380,6 @@ export class ViewSchedulePage implements OnInit {
       console.error('Error loading schedules:', error);
     } finally {
       this.isLoading = false;
-      await loading.dismiss();
     }
   }
 
@@ -410,191 +414,6 @@ export class ViewSchedulePage implements OnInit {
     const displayHour = hour % 12 || 12;
 
     return `${displayHour}:${minutes} ${ampm}`;
-  }
-
-  async markScheduleAsDone(schedule: ScheduleItem) {
-    console.log('🔄 markScheduleAsDone called for schedule:', schedule);
-
-    const loading = await this.loadingController.create({
-      message: 'Marking schedule as completed...'
-    });
-    await loading.present();
-
-    try {
-      const currentUser = this.authService.getCurrentUser();
-      console.log('👤 Current user:', currentUser);
-
-      if (!currentUser) {
-        await loading.dismiss();
-        await this.showToast('User not authenticated');
-        return;
-      }
-
-      
-      const docIds = this.allScheduleDocIds(schedule);
-      console.log('📝 Updating schedule doc(s) in Firestore:', docIds.join(', '));
-      for (const docId of docIds) {
-        const scheduleDoc = doc(this.firestore, 'Schedules', docId);
-        await updateDoc(scheduleDoc, {
-          'Status': 'completed',
-          'Completed At': serverTimestamp(),
-          'Completed By': currentUser.fullName || currentUser.email || 'Unknown User'
-        });
-      }
-      console.log('✅ Schedule(s) updated in Firestore');
-
-      
-      await this.sendCompletionNotification(schedule, currentUser);
-
-      
-      await this.sendPickupNotificationToParents(schedule, currentUser);
-
-      
-      await this.createPickupNotificationLog(schedule, currentUser);
-
-      
-      await this.sendCapacitorScheduleNotification(schedule, currentUser);
-
-      
-      console.log('🗑️ Removing schedule from local array');
-      const scheduleIndex = this.schedules.findIndex(s => s.id === schedule.id);
-      console.log('📍 Schedule index found:', scheduleIndex);
-
-      if (scheduleIndex !== -1) {
-        this.schedules.splice(scheduleIndex, 1);
-        console.log('✅ Schedule removed from local array. Remaining schedules:', this.schedules.length);
-      } else {
-        console.log('❌ Schedule not found in local array');
-      }
-
-      await loading.dismiss();
-      await this.showToast('✅ Schedule completed and logged successfully!');
-
-    } catch (error) {
-      await loading.dismiss();
-      console.error('Error marking schedule as done:', error);
-      await this.showToast('Error marking schedule as completed. Please try again.');
-    }
-  }
-
-  async sendCompletionNotification(schedule: ScheduleItem, currentUser: any) {
-    try {
-      if (!schedule.fetcherUID) {
-        console.log('No fetcher UID found for notification');
-        return;
-      }
-
-      
-      const notificationData = {
-        type: 'schedule_completion',
-        title: 'Schedule Completed',
-        message: `The pickup schedule for ${schedule.childName} on ${schedule.days} at ${schedule.time} has been marked as completed.`,
-        recipientId: schedule.fetcherUID,
-        senderId: currentUser.uid, 
-        senderName: currentUser.fullName || currentUser.email || 'Family Member',
-        familyName: schedule.familyName,
-        scheduleId: schedule.id,
-        scheduleDate: schedule.date,
-        scheduleTime: schedule.time,
-        scheduleDays: schedule.days,
-        childName: schedule.childName,
-        childGrade: schedule.childGrade,
-        isRead: false,
-        createdAt: serverTimestamp()
-      };
-
-      
-      const notificationsCollection = collection(this.firestore, 'Notifications');
-      await addDoc(notificationsCollection, notificationData);
-
-      console.log('Completion notification sent to:', schedule.fetcherName);
-    } catch (error) {
-      console.error('Error sending completion notification:', error);
-    }
-  }
-
-  async sendPickupNotificationToParents(schedule: ScheduleItem, currentUser: any) {
-    try {
-      
-      const family = await this.familyService.getUserFamily();
-      if (!family) return;
-
-      const familyMembers = await this.familyService.getFamilyMembers(family.name);
-      const parentsAndOwners = familyMembers.filter(member =>
-        member.role === 'owner' || member.role === 'parent'
-      );
-
-      
-      const notificationsCollection = collection(this.firestore, 'Notifications');
-      const notificationPromises = [];
-
-      for (const parent of parentsAndOwners) {
-        
-        if (parent.uid === currentUser.uid) continue;
-
-        const pickupNotificationData = {
-          type: 'pickup_completion',
-          title: `${schedule.childName} picked up`,
-          message: `${schedule.childName} has been picked up by ${currentUser.fullName || currentUser.email || 'Unknown'}`,
-          recipientId: parent.uid,
-          senderId: currentUser.uid,
-          senderName: currentUser.fullName || currentUser.email || 'Family Member',
-          familyName: schedule.familyName,
-          childName: schedule.childName,
-          childGrade: schedule.childGrade,
-          fetcherName: currentUser.fullName || currentUser.email || 'Unknown',
-          completedBy: currentUser.fullName || currentUser.email || 'Unknown',
-          scheduleId: schedule.id,
-          scheduleDate: schedule.date,
-          scheduleTime: schedule.time,
-          isRead: false,
-          createdAt: serverTimestamp()
-        };
-
-        notificationPromises.push(addDoc(notificationsCollection, pickupNotificationData));
-      }
-
-      
-      await Promise.all(notificationPromises);
-
-      console.log(`Pickup notifications sent to ${parentsAndOwners.length} parents/owners`);
-    } catch (error) {
-      console.error('Error sending pickup notifications to parents:', error);
-    }
-  }
-
-  async createPickupNotificationLog(schedule: ScheduleItem, currentUser: any) {
-    try {
-      console.log('📝 Creating pickup notification log for:', schedule.childName);
-
-      
-      const pickupNotificationData = {
-        type: 'pickup_completion',
-        title: `${schedule.childName} picked up`,
-        message: `${schedule.childName} was successfully picked up by ${currentUser.fullName || currentUser.email || 'Unknown User'}`,
-        childName: schedule.childName,
-        childGrade: schedule.childGrade,
-        fetcherName: schedule.fetcherName,
-        completedBy: currentUser.fullName || currentUser.email || 'Unknown User',
-        familyName: schedule.familyName,
-        scheduleId: schedule.id,
-        scheduleDate: schedule.date,
-        scheduleTime: schedule.time,
-        scheduleDays: schedule.days,
-        isRead: false,
-        createdAt: serverTimestamp()
-      };
-
-      console.log('📄 Notification data to save:', pickupNotificationData);
-
-      
-      const notificationsCollection = collection(this.firestore, 'Notifications');
-      await addDoc(notificationsCollection, pickupNotificationData);
-      
-      console.log('✅ Pickup notification logged successfully');      
-    } catch (error) {
-      console.error('❌ Error creating pickup notification log:', error);
-    }
   }
 
   async createAutomaticPickupNotificationLog(schedule: ScheduleItem, completedBy: string) {
@@ -646,23 +465,6 @@ export class ViewSchedulePage implements OnInit {
     }
   }
 
-  async sendCapacitorScheduleNotification(schedule: ScheduleItem, currentUser: any) {
-    try {
-      const title = '📅 Schedule Completed';
-      const message = `${schedule.childName} has been picked up by ${currentUser.fullName || currentUser.email || 'Unknown User'}`;
-
-      await this.notificationService.sendScheduleNotification(
-        title,
-        message,
-        schedule.familyName
-      );
-
-      console.log('✅ Capacitor schedule notification sent');
-    } catch (error) {
-      console.error('❌ Error sending Capacitor schedule notification:', error);
-    }
-  }
-
   async showToast(message: string) {
     const toast = await this.toastController.create({
       message: message,
@@ -676,31 +478,209 @@ export class ViewSchedulePage implements OnInit {
     return schedule.status === 'completed';
   }
 
-  canMarkAsDone(schedule: ScheduleItem): boolean {
-    
-    if (schedule.status === 'completed') {
-      return false;
-    }
-
-    const ymd = this.toLocalYmd(schedule.date);
-    const parts = ymd.split('-').map((n) => parseInt(n, 10));
-    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
-      return false;
-    }
-    const [y, m, d] = parts;
-    const scheduleDay = new Date(y, m - 1, d);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    return scheduleDay <= today;
-  }
-
   goBack() {
     this.location.back();
   }
 
   navigateTo(route: string) {
     this.router.navigate([route]);
+  }
+
+  canEditOrDeleteSchedule(): boolean {
+    return !!(this.userRole?.canAccessScheduling);
+  }
+
+  isEditing(schedule: ScheduleItem): boolean {
+    return this.editingScheduleId === schedule.id;
+  }
+
+  private async loadFamilyPickersForEdit(): Promise<void> {
+    if (!this.familyName) {
+      return;
+    }
+    try {
+      this.familyMembers = await this.familyService.getFamilyMembers(this.familyName);
+      this.children = await this.familyService.getFamilyChildren(this.familyName);
+    } catch (e) {
+      console.error('loadFamilyPickersForEdit:', e);
+      this.familyMembers = [];
+      this.children = [];
+    }
+  }
+
+  getFetchersForEdit(): FamilyMember[] {
+    const eligible = this.familyMembers.filter(
+      (m) => m.role === 'owner' || m.role === 'parent' || m.role === 'companion'
+    );
+    const byUid = new Map<string, FamilyMember>();
+    for (const m of eligible) {
+      byUid.set(m.uid, m);
+    }
+    const cu = this.authService.getCurrentUser();
+    if (
+      cu &&
+      this.userRole &&
+      !byUid.has(cu.uid) &&
+      (this.userRole.role === 'owner' || this.userRole.role === 'parent')
+    ) {
+      byUid.set(cu.uid, {
+        id: cu.uid,
+        uid: cu.uid,
+        name: cu.fullName || cu.email || 'Me',
+        email: cu.email || '',
+        contactNumber: cu.contactNumber || '',
+        role: this.userRole.role as FamilyMember['role'],
+        joinedDate: null,
+      });
+    }
+    return Array.from(byUid.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+  }
+
+  /** Normalize stored time to HH:mm for ion-input[type=time] */
+  private normalizeTimeForInput(time: string): string {
+    const t = (time || '').trim();
+    if (!t) {
+      return '00:00';
+    }
+    const ampm = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)$/);
+    if (ampm) {
+      let h = parseInt(ampm[1], 10);
+      const m = ampm[2];
+      const ap = ampm[3].toUpperCase();
+      if (ap === 'PM' && h !== 12) {
+        h += 12;
+      }
+      if (ap === 'AM' && h === 12) {
+        h = 0;
+      }
+      return `${String(h).padStart(2, '0')}:${m}`;
+    }
+    const h24 = t.match(/^(\d{1,2}):(\d{2})/);
+    if (h24) {
+      const h = Math.min(23, Math.max(0, parseInt(h24[1], 10)));
+      return `${String(h).padStart(2, '0')}:${h24[2]}`;
+    }
+    return '00:00';
+  }
+
+  async startInlineEdit(schedule: ScheduleItem): Promise<void> {
+    if (!this.canEditOrDeleteSchedule() || this.isScheduleCompleted(schedule)) {
+      return;
+    }
+    if (!this.familyMembers.length && this.familyName) {
+      await this.loadFamilyPickersForEdit();
+    }
+    if (!this.getFetchersForEdit().length) {
+      await this.showToast('No fetchers available to assign.');
+      return;
+    }
+    if (!this.children.length) {
+      await this.showToast('No children found for this family.');
+      return;
+    }
+    this.editingScheduleId = schedule.id;
+    this.editFetcherUID = schedule.fetcherUID || '';
+    this.editChildName = schedule.childName || '';
+    this.editTime = this.normalizeTimeForInput(schedule.time);
+  }
+
+  cancelInlineEdit(): void {
+    this.editingScheduleId = null;
+  }
+
+  async saveInlineEdit(schedule: ScheduleItem): Promise<void> {
+    if (this.savingInlineEdit || !this.isEditing(schedule)) {
+      return;
+    }
+    const fetcher = this.getFetchersForEdit().find((f) => f.uid === this.editFetcherUID);
+    const child = this.children.find((c) => c.name === this.editChildName);
+    if (!fetcher) {
+      await this.showToast('Select an assigned fetcher');
+      return;
+    }
+    if (!child) {
+      await this.showToast('Select a child');
+      return;
+    }
+    const timeToStore = (this.editTime || '').trim();
+    if (!timeToStore) {
+      await this.showToast('Set a pickup time');
+      return;
+    }
+
+    this.savingInlineEdit = true;
+    const loading = await this.loadingController.create({ message: 'Saving changes...' });
+    await loading.present();
+    try {
+      const updates = {
+        'Companions Name': fetcher.name,
+        'Fetcher UID': fetcher.uid,
+        'Childs Name': child.name,
+        'Childs Grade': child.grade || '',
+        'Time': timeToStore,
+      };
+      for (const id of this.allScheduleDocIds(schedule)) {
+        await updateDoc(doc(this.firestore, 'Schedules', id), updates);
+      }
+      schedule.fetcherName = fetcher.name;
+      schedule.fetcherUID = fetcher.uid;
+      schedule.companionName = fetcher.name;
+      schedule.childName = child.name;
+      schedule.childGrade = child.grade || '';
+      schedule.time = timeToStore;
+      this.editingScheduleId = null;
+      this.schedules.sort((a, b) => this.compareSchedulesChronologically(a, b));
+      await this.showToast('Schedule updated');
+    } catch (e) {
+      console.error('saveInlineEdit:', e);
+      await this.showToast('Could not save changes. Try again.');
+    } finally {
+      await loading.dismiss();
+      this.savingInlineEdit = false;
+    }
+  }
+
+  async confirmDeleteSchedule(schedule: ScheduleItem): Promise<void> {
+    if (!this.canEditOrDeleteSchedule() || this.isScheduleCompleted(schedule)) {
+      return;
+    }
+    const alert = await this.alertController.create({
+      header: 'Delete schedule?',
+      message: `Remove pickup for ${schedule.childName} on ${this.getFormattedDate(schedule.date)} at ${this.getFormattedTime(schedule.time)}?`,
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Delete',
+          role: 'destructive',
+          handler: () => {
+            void this.deleteSchedule(schedule);
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  private async deleteSchedule(schedule: ScheduleItem): Promise<void> {
+    const loading = await this.loadingController.create({ message: 'Deleting schedule...' });
+    await loading.present();
+    try {
+      for (const id of this.allScheduleDocIds(schedule)) {
+        await deleteDoc(doc(this.firestore, 'Schedules', id));
+      }
+      const idx = this.schedules.findIndex((s) => s.id === schedule.id);
+      if (idx !== -1) {
+        this.schedules.splice(idx, 1);
+      }
+      await this.showToast('Schedule deleted');
+    } catch (e) {
+      console.error('Delete schedule error:', e);
+      await this.showToast('Could not delete schedule. Try again.');
+    } finally {
+      await loading.dismiss();
+    }
   }
 
   async triggerPanic() {

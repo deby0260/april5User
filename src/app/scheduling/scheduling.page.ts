@@ -5,10 +5,12 @@ import {
   Firestore,
   collection,
   addDoc,
+  doc,
   serverTimestamp,
   query,
   where,
   getDocs,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { FamilyService, FamilyMember } from '../services/family.service';
@@ -28,6 +30,18 @@ interface ScheduleData {
   selectedTime: string;
   familyName: string;
   parentName: string;
+}
+
+/** Passed from view-schedule via router state when editing an existing pickup */
+export interface ScheduleEditState {
+  docIds: string[];
+  fetcherUID: string;
+  fetcherName: string;
+  days: string;
+  selectedDate: string;
+  time: string;
+  childName: string;
+  childGrade: string;
 }
 
 @Component({
@@ -53,11 +67,17 @@ export class SchedulingPage implements OnInit {
   children: any[] = [];
   currentUserRole: string = '';
   canManageSchedule: boolean = false;
+  /** False until loadUserRole finishes — avoids showing "no access" while role is still loading */
+  scheduleAccessLoading = true;
   minDate: string = '';
   maxDate: string = '';
   /** Bumps when weekday selection changes so ion-datetime remounts cleanly */
   calendarRemountKey = 0;
   private saveInProgress = false;
+  /** Firestore doc ids to replace when saving (edit mode); null when creating */
+  private editDocIds: string[] | null = null;
+  isEditMode = false;
+  private pendingEditState: ScheduleEditState | null = null;
 
   private static readonly LABEL_TO_MONDAY_OFFSET: Record<string, number> = {
     Monday: 0,
@@ -89,7 +109,13 @@ export class SchedulingPage implements OnInit {
     private loadingController: LoadingController,
     private toastController: ToastController,
     private roleAccessService: RoleAccessService
-  ) {}
+  ) {
+    const nav = this.router.getCurrentNavigation();
+    const fromNav = nav?.extras?.state?.['editSchedule'] as ScheduleEditState | undefined;
+    if (fromNav?.docIds?.length) {
+      this.pendingEditState = fromNav;
+    }
+  }
 
   async ngOnInit() {
     const today = new Date();
@@ -99,8 +125,42 @@ export class SchedulingPage implements OnInit {
     maxDate.setFullYear(maxDate.getFullYear() + 1);
     this.maxDate = maxDate.toISOString();
 
-    await this.loadFamilyData();
-    await this.loadUserRole();
+    this.scheduleAccessLoading = true;
+    try {
+      // Family data and role do not depend on each other for first paint; parallel is faster than sequential awaits
+      await Promise.all([this.loadFamilyData(), this.loadUserRole()]);
+    } finally {
+      this.scheduleAccessLoading = false;
+    }
+
+    let toApply = this.pendingEditState;
+    this.pendingEditState = null;
+    if (!toApply && typeof history !== 'undefined') {
+      const st = history.state as { editSchedule?: ScheduleEditState } | null;
+      if (st?.editSchedule?.docIds?.length) {
+        toApply = st.editSchedule;
+      }
+    }
+    if (toApply && this.canManageSchedule) {
+      this.applyEditState(toApply);
+    }
+  }
+
+  private applyEditState(state: ScheduleEditState): void {
+    this.editDocIds = [...state.docIds];
+    this.isEditMode = true;
+    this.scheduleData.fetcherUID = state.fetcherUID;
+    this.scheduleData.fetcherName = state.fetcherName;
+    this.scheduleData.companionName = state.fetcherName;
+    const dayParts = state.days.split(',').map((d) => d.trim()).filter(Boolean);
+    this.scheduleData.selectedDays = dayParts.length > 0 ? dayParts : [];
+    this.scheduleData.selectedDate = state.selectedDate;
+    this.scheduleData.selectedTime = state.time || '00:00';
+    const match = this.children.find((c) => c.name === state.childName);
+    this.scheduleData.selectedChildren = match
+      ? [match]
+      : [{ name: state.childName, grade: state.childGrade || '' }];
+    this.calendarRemountKey += 1;
   }
 
   async loadFamilyData() {
@@ -447,12 +507,18 @@ export class SchedulingPage implements OnInit {
     return `${date}|${this.normalizeTimeStr(time)}|${String(childName || '').trim()}`;
   }
 
-  private async loadPendingScheduleKeysForFamily(familyName: string): Promise<Set<string>> {
+  private async loadPendingScheduleKeysForFamily(
+    familyName: string,
+    excludeDocIds?: Set<string>
+  ): Promise<Set<string>> {
     const schedulesCollection = collection(this.firestore, 'Schedules');
     const q = query(schedulesCollection, where('Family Name', '==', familyName));
     const snap = await getDocs(q);
     const keys = new Set<string>();
     snap.forEach((docSnap) => {
+      if (excludeDocIds?.has(docSnap.id)) {
+        return;
+      }
       const d = docSnap.data();
       const status = d['Status'] || 'pending';
       if (status !== 'pending') {
@@ -480,7 +546,9 @@ export class SchedulingPage implements OnInit {
     if (!family) {
       return null;
     }
-    const existing = await this.loadPendingScheduleKeysForFamily(family);
+    const exclude =
+      this.editDocIds && this.editDocIds.length > 0 ? new Set(this.editDocIds) : undefined;
+    const existing = await this.loadPendingScheduleKeysForFamily(family, exclude);
     const normTime = this.normalizeTimeStr(time);
     for (const entry of toSave) {
       for (const child of children) {
@@ -548,7 +616,7 @@ export class SchedulingPage implements OnInit {
     }
 
     const loading = await this.loadingController.create({
-      message: 'Saving schedule...',
+      message: this.isEditMode ? 'Updating schedule...' : 'Saving schedule...',
     });
     await loading.present();
     this.saveInProgress = true;
@@ -561,8 +629,9 @@ export class SchedulingPage implements OnInit {
         return;
       }
 
+      const wasEdit = !!(this.editDocIds && this.editDocIds.length > 0);
+
       const schedulesCollection = collection(this.firestore, 'Schedules');
-      const schedulePromises = [];
 
       const assign = {
         uid: this.scheduleData.fetcherUID,
@@ -573,6 +642,23 @@ export class SchedulingPage implements OnInit {
         string,
         { fetcherUid: string; fetcherName: string; days: Set<string>; dates: Set<string> }
       >();
+
+      const buildDocPayload = (entry: { dayLabel: string; date: string }, child: any) => ({
+        'Childs Grade': child.grade || '',
+        'Childs Name': child.name || '',
+        'Companions Name': assign.name,
+        'Date': entry.date,
+        'Parent Name': this.scheduleData.parentName,
+        'Time': this.scheduleData.selectedTime,
+        'Family Name': this.scheduleData.familyName,
+        'Days': entry.dayLabel,
+        'Fetcher UID': assign.uid,
+        'Creator UID': currentUser.uid,
+        'Created At': serverTimestamp(),
+        'Status': 'pending',
+        'Monthly repeat': false,
+        'id': '',
+      });
 
       for (const entry of toSave) {
         const key = assign.uid;
@@ -586,36 +672,41 @@ export class SchedulingPage implements OnInit {
         }
         notifyByFetcher.get(key)!.days.add(entry.dayLabel);
         notifyByFetcher.get(key)!.dates.add(entry.date);
-
-        for (const child of this.scheduleData.selectedChildren) {
-          const scheduleData = {
-            'Childs Grade': child.grade || '',
-            'Childs Name': child.name || '',
-            'Companions Name': assign.name,
-            'Date': entry.date,
-            'Parent Name': this.scheduleData.parentName,
-            'Time': this.scheduleData.selectedTime,
-            'Family Name': this.scheduleData.familyName,
-            'Days': entry.dayLabel,
-            'Fetcher UID': assign.uid,
-            'Creator UID': currentUser.uid,
-            'Created At': serverTimestamp(),
-            'Status': 'pending',
-            'Monthly repeat': false,
-            'id': '',
-          };
-
-          schedulePromises.push(addDoc(schedulesCollection, scheduleData));
-        }
       }
 
-      await Promise.all(schedulePromises);
+      if (this.editDocIds && this.editDocIds.length > 0) {
+        const batch = writeBatch(this.firestore);
+        for (const id of this.editDocIds) {
+          batch.delete(doc(this.firestore, 'Schedules', id));
+        }
+        for (const entry of toSave) {
+          for (const child of this.scheduleData.selectedChildren) {
+            const ref = doc(collection(this.firestore, 'Schedules'));
+            batch.set(ref, buildDocPayload(entry, child));
+          }
+        }
+        await batch.commit();
+        this.editDocIds = null;
+        this.isEditMode = false;
+      } else {
+        const schedulePromises: Promise<unknown>[] = [];
+        for (const entry of toSave) {
+          for (const child of this.scheduleData.selectedChildren) {
+            schedulePromises.push(addDoc(schedulesCollection, buildDocPayload(entry, child)));
+          }
+        }
+        await Promise.all(schedulePromises);
+      }
 
       await this.sendScheduleNotifications(Array.from(notifyByFetcher.values()));
 
       await loading.dismiss();
       const totalDocs = toSave.length * this.scheduleData.selectedChildren.length;
-      await this.showToast(`Saved ${totalDocs} schedule(s) for ${this.scheduleData.selectedChildren.length} child(ren).`);
+      await this.showToast(
+        wasEdit
+          ? `Updated ${totalDocs} schedule document(s).`
+          : `Saved ${totalDocs} schedule(s) for ${this.scheduleData.selectedChildren.length} child(ren).`
+      );
 
       console.log(`Saved ${totalDocs} schedule document(s)`);
       this.goBack();
@@ -642,17 +733,19 @@ export class SchedulingPage implements OnInit {
 
       const childrenNames = this.scheduleData.selectedChildren.map((child) => child.name).join(', ');
       const childCount = this.scheduleData.selectedChildren.length;
-      const childText = childCount === 1 ? 'child' : 'children';
 
       const notificationsCollection = collection(this.firestore, 'Notifications');
       for (const g of fetcherGroups) {
-        const days = Array.from(g.days).sort();
+        const days = Array.from(g.days).sort(
+          (a, b) =>
+            (SchedulingPage.DAY_SORT_ORDER[a] ?? 99) - (SchedulingPage.DAY_SORT_ORDER[b] ?? 99)
+        );
         const dates = Array.from(g.dates).sort();
         const dayLabel = days.join(', ');
         const datePart = dates.join(', ');
         const firstDate = dates[0] || '';
 
-        const message = `You have been scheduled to pick up ${childCount} ${childText} (${childrenNames}) on ${dayLabel} at ${this.scheduleData.selectedTime}. Dates: ${datePart}.`;
+        const message = `You have been scheduled to pick up ${childrenNames} on ${dayLabel} at ${this.scheduleData.selectedTime}. Dates: ${datePart}.`;
 
         const notificationData = {
           type: 'schedule_assignment',

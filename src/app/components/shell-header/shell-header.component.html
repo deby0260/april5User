@@ -1,0 +1,24 @@
+<div class="shell-header" [class.shell-header--sub]="layout === 'with-back'">
+  <div class="shell-header__inner">
+    <ion-button
+      *ngIf="layout === 'with-back'"
+      fill="clear"
+      class="shell-header__back"
+      (click)="goBack()"
+      aria-label="Go back">
+      <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+    </ion-button>
+
+    <div class="shell-header__logo">
+      <img src="assets/logo2.png" alt="FetchSafe logo" />
+    </div>
+
+    <button
+      type="button"
+      class="shell-header__bell"
+      (click)="navigateToNotifications()"
+      aria-label="Notifications">
+      <ion-icon name="notifications-outline"></ion-icon>
+    </button>
+  </div>
+</div>

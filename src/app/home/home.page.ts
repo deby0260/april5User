@@ -280,13 +280,13 @@ export class HomePage implements OnInit {
    */
   private async checkFamilyAccess(): Promise<boolean> {
     if (!this.currentUser) {
-      await this.showAccessDeniedAlert('Please log in to access this feature.');
+      await this.showAccessDeniedAlert('Please log in to access this feature.', false);
       return false;
     }
 
     const hasFamily = await this.familyService.checkUserHasFamily();
     if (!hasFamily) {
-      await this.showAccessDeniedAlert('Please create a family first to access this feature.');
+      await this.showAccessDeniedAlert('Please create a family first to access this feature.', true);
       return false;
     }
 
@@ -295,15 +295,13 @@ export class HomePage implements OnInit {
 
   private async checkRoleAccess(feature: string): Promise<boolean> {
     if (!this.currentUser) {
-      await this.showAccessDeniedAlert('Please log in to access this feature.');
+      await this.showAccessDeniedAlert('Please log in to access this feature.', false);
       return false;
     }
 
     const hasAccess = await this.roleAccessService.canUserAccess(feature);
     if (!hasAccess) {
-      const userRoleString = await this.roleAccessService.getUserRoleString();
-      const message = this.roleAccessService.getAccessDeniedMessage(feature, userRoleString);
-      await this.showAccessDeniedAlert(message);
+      await this.showAccessDeniedAlert('', false);
       return false;
     }
 
@@ -311,30 +309,33 @@ export class HomePage implements OnInit {
   }
 
   /**
-   * Show access denied alert with option to create family
+   * Access denied alert. Empty message = header only. Create Family only when no family yet.
    */
-  private async showAccessDeniedAlert(message: string) {
+  private async showAccessDeniedAlert(message: string, includeCreateFamily = false) {
+    const buttons: {
+      text: string;
+      role?: string;
+      handler?: () => void | Promise<void>;
+    }[] = [{ text: 'Cancel', role: 'cancel' }];
+
+    if (includeCreateFamily) {
+      buttons.push({
+        text: 'Create Family',
+        handler: async () => {
+          const hasFamily = await this.familyService.checkUserHasFamily();
+          if (hasFamily) {
+            this.router.navigate(['/created-family']);
+          } else {
+            this.router.navigate(['/register-create-family']);
+          }
+        },
+      });
+    }
+
     const alert = await this.alertController.create({
       header: 'Access Restricted',
-      message: message,
-      buttons: [
-        {
-          text: 'Cancel',
-          role: 'cancel'
-        },
-        {
-          text: 'Create Family',
-          handler: async () => {
-            // Check if user already has a family before navigating
-            const hasFamily = await this.familyService.checkUserHasFamily();
-            if (hasFamily) {
-              this.router.navigate(['/created-family']);
-            } else {
-              this.router.navigate(['/register-create-family']);
-            }
-          }
-        }
-      ]
+      ...(message.trim() ? { message } : {}),
+      buttons,
     });
     await alert.present();
   }
@@ -365,10 +366,6 @@ export class HomePage implements OnInit {
 
   navigateToSettings() {
     this.router.navigate(['/settings']);
-  }
-
-  navigateToNotifications() {
-    this.router.navigate(['/notifications']);
   }
 
   navigateTo(route: string) {

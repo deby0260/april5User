@@ -13,6 +13,9 @@ import { LoadingController, AlertController, ToastController } from '@ionic/angu
 export class LoginPage implements OnInit {
   email: string = '';
   password: string = '';
+  /** Toggle between masked and visible password */
+  showPassword = false;
+
   isLoading: boolean = false;
 
   constructor(
@@ -25,6 +28,11 @@ export class LoginPage implements OnInit {
   ) { }
 
   ngOnInit() {
+  }
+
+  togglePasswordVisibility(ev?: Event): void {
+    ev?.stopPropagation();
+    this.showPassword = !this.showPassword;
   }
 
   async login() {

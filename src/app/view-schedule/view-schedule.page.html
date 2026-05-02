@@ -1,17 +1,5 @@
 <ion-content [fullscreen]="true" class="view-schedule-page" [scrollY]="true">
   <div class="page-container">
-    
-    <div class="header-section">
-      <ion-button fill="clear" class="back-button" (click)="goBack()">
-        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
-      </ion-button>
-
-      <div class="logo">
-        <img src="assets/logo2.png" alt="FetchSafe logo" />
-      </div>
-    </div>
-
-    
     <div class="title-section">
       <h1>View Schedule</h1>
     </div>
@@ -40,15 +28,23 @@
       <div *ngIf="!isLoading && schedules.length > 0" class="schedule-container">
         <div class="schedule-list">
           <div class="schedule-item" *ngFor="let schedule of schedules">
-            <div class="schedule-card" [class.completed]="isScheduleCompleted(schedule)">
+            <div class="schedule-card" [class.completed]="isScheduleCompleted(schedule)" [class.editing]="isEditing(schedule)">
               <div class="schedule-header">
                 <div class="date-info">
                   <span class="date-display">{{ getFormattedDate(schedule.date) }}</span>
                   <span class="days-display">{{ schedule.days }}</span>
                 </div>
-                <div class="time-info">
+                <div class="time-info" *ngIf="!isEditing(schedule)">
                   <ion-icon name="time-outline"></ion-icon>
                   <span class="time-display">{{ getFormattedTime(schedule.time) }}</span>
+                </div>
+                <div class="time-info time-info-edit" *ngIf="isEditing(schedule)">
+                  <ion-icon name="time-outline"></ion-icon>
+                  <ion-input
+                    type="time"
+                    [(ngModel)]="editTime"
+                    class="inline-time-input"
+                    aria-label="Pickup time"></ion-input>
                 </div>
                 <div class="status-info" *ngIf="isScheduleCompleted(schedule)">
                   <ion-icon name="checkmark-circle" class="completed-icon"></ion-icon>
@@ -61,15 +57,41 @@
                   <ion-icon name="person-outline"></ion-icon>
                   <div class="fetcher-details">
                     <span class="fetcher-label">Assigned Fetcher:</span>
-                    <span class="fetcher-name">{{ schedule.fetcherName }}</span>
+                    <span class="fetcher-name" *ngIf="!isEditing(schedule)">{{ schedule.fetcherName }}</span>
+                    <ion-select
+                      *ngIf="isEditing(schedule)"
+                      class="inline-edit-select"
+                      [value]="editFetcherUID"
+                      (ionChange)="editFetcherUID = $any($event.detail.value)"
+                      interface="popover"
+                      placeholder="Select fetcher"
+                      aria-label="Assigned fetcher">
+                      <ion-select-option *ngFor="let m of getFetchersForEdit()" [value]="m.uid">
+                        {{ m.name }} ({{ m.role | titlecase }})
+                      </ion-select-option>
+                    </ion-select>
                   </div>
                 </div>
 
-                <div class="child-info" *ngIf="schedule.childName">
+                <div class="child-info" *ngIf="schedule.childName || isEditing(schedule)">
                   <ion-icon name="school-outline"></ion-icon>
                   <div class="child-details">
                     <span class="child-label">Child:</span>
-                    <span class="child-name">{{ schedule.childName }} - {{ schedule.childGrade }}</span>
+                    <ng-container *ngIf="!isEditing(schedule)">
+                      <span class="child-name">{{ schedule.childName }} - {{ schedule.childGrade }}</span>
+                    </ng-container>
+                    <ion-select
+                      *ngIf="isEditing(schedule)"
+                      class="inline-edit-select"
+                      [value]="editChildName"
+                      (ionChange)="editChildName = $any($event.detail.value)"
+                      interface="popover"
+                      placeholder="Select child"
+                      aria-label="Child">
+                      <ion-select-option *ngFor="let c of children" [value]="c.name">
+                        {{ c.name }} — {{ c.grade }}
+                      </ion-select-option>
+                    </ion-select>
                   </div>
                 </div>
 
@@ -92,16 +114,46 @@
               </div>
 
               
-              <div class="schedule-actions" *ngIf="!isScheduleCompleted(schedule)">
-                <ion-button
-                  fill="solid"
-                  color="success"
-                  size="small"
-                  [disabled]="!canMarkAsDone(schedule)"
-                  (click)="markScheduleAsDone(schedule)">
-                  <ion-icon name="checkmark" slot="start"></ion-icon>
-                  Mark as Done
-                </ion-button>
+              <div
+                class="schedule-actions"
+                *ngIf="!isScheduleCompleted(schedule) && canEditOrDeleteSchedule()">
+                <div class="schedule-actions-row" *ngIf="!isEditing(schedule)">
+                  <ion-button
+                    fill="outline"
+                    size="small"
+                    class="action-edit"
+                    (click)="startInlineEdit(schedule)">
+                    <ion-icon name="create-outline" slot="start"></ion-icon>
+                    Edit
+                  </ion-button>
+                  <ion-button
+                    fill="outline"
+                    size="small"
+                    color="danger"
+                    class="action-delete"
+                    (click)="confirmDeleteSchedule(schedule)">
+                    <ion-icon name="trash-outline" slot="start"></ion-icon>
+                    Delete
+                  </ion-button>
+                </div>
+                <div class="schedule-actions-row schedule-actions-row--save" *ngIf="isEditing(schedule)">
+                  <ion-button
+                    fill="solid"
+                    size="small"
+                    class="action-save"
+                    color="primary"
+                    [disabled]="savingInlineEdit"
+                    (click)="saveInlineEdit(schedule)">
+                    Save
+                  </ion-button>
+                  <ion-button
+                    fill="outline"
+                    size="small"
+                    [disabled]="savingInlineEdit"
+                    (click)="cancelInlineEdit()">
+                    Cancel
+                  </ion-button>
+                </div>
               </div>
             </div>
           </div>
@@ -110,6 +162,3 @@
     </div>
   </div>
 </ion-content>
-
-
-<app-bottom-navigation></app-bottom-navigation>

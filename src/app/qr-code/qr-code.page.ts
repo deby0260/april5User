@@ -250,13 +250,16 @@ export class QrCodePage implements OnInit {
       // `fam` duplicates `family` so short links / scanners that clip the query still often retain a working param
       const enc = encodeURIComponent(familyName);
       const auth = encodeURIComponent(this.currentUser.email || '');
-      const hostedUrl = `${this.hostedBaseUrl}?family=${enc}&fam=${enc}&authorizer=${auth}`;
+      // `uid` identifies the account that generated this QR (stable; use this on fetchsafe2.web.app to load the user)
+      const uidEnc = encodeURIComponent(this.currentUser.uid || '');
+      const hostedUrl = `${this.hostedBaseUrl}?family=${enc}&fam=${enc}&authorizer=${auth}&uid=${uidEnc}`;
 
       console.log('🔗 QR URL:', hostedUrl);
 
       const familyData = {
         familyName,
         authorizer: this.currentUser.email,
+        authorizerUid: this.currentUser.uid,
         generatedAt: new Date().toISOString()
       };
 

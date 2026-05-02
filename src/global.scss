@@ -175,6 +175,26 @@ ion-datetime {
   }
 }
 
+/* Global shell: fixed header = safe-area + inner bar (~12+row+12) + gap below bar */
+ion-app.app-shell-chrome {
+  --fetchsafe-shell-header-bar: 80px;
+  --fetchsafe-shell-header-gap: 12px;
+}
+
+ion-app.app-shell-chrome ion-content {
+  --padding-top: calc(
+    env(safe-area-inset-top, 0px) +
+      var(--fetchsafe-shell-header-bar) +
+      var(--fetchsafe-shell-header-gap)
+  );
+}
+
+/* More specific: modals/popovers must not reserve the app shell header height */
+ion-app.app-shell-chrome ion-modal ion-content,
+ion-app.app-shell-chrome ion-popover ion-content {
+  --padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Ensure bottom navigation is always clickable and on top */
 app-bottom-navigation {
   position: relative;
@@ -192,6 +212,80 @@ app-bottom-navigation {
 /* Prevent any overlays from blocking the bottom navigation */
 ion-modal, ion-popover, ion-alert, ion-loading, ion-toast {
   z-index: 9998 !important;
+}
+
+/* Notification detail sheet (inline modal from notifications page) */
+ion-modal.notification-detail-modal {
+  --border-radius: 16px 16px 0 0;
+  --backdrop-opacity: 0.45;
+}
+
+ion-modal.notification-detail-modal .notification-detail-title {
+  font-size: 1rem;
+  font-weight: 700;
+  padding-inline-end: 8px;
+}
+
+ion-modal.notification-detail-modal .notification-detail-content .detail-time {
+  font-size: 0.8rem;
+  color: #999;
+  margin: 0 0 12px 0;
+}
+
+ion-modal.notification-detail-modal .notification-detail-content .detail-body {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #333;
+  margin: 0 0 16px 0;
+  white-space: pre-wrap;
+}
+
+ion-modal.notification-detail-modal .notification-detail-content .detail-status {
+  margin-bottom: 16px;
+}
+
+ion-modal.notification-detail-modal .notification-detail-content .detail-actions {
+  margin-top: 8px;
+}
+
+/* Notification log: centered card modal (not bottom sheet) */
+ion-modal.notification-log-detail-modal {
+  --width: min(420px, 92vw);
+  --height: auto;
+  --max-height: min(520px, 85vh);
+  --border-radius: 16px;
+  --backdrop-opacity: 0.5;
+  --box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+ion-modal.notification-log-detail-modal::part(content) {
+  border-radius: 16px;
+}
+
+ion-modal.notification-log-detail-modal ion-toolbar {
+  --background: #fffdfd;
+  --border-width: 0;
+  --min-height: 52px;
+}
+
+ion-modal.notification-log-detail-modal .notification-log-detail-modal__title {
+  font-size: 1rem;
+  font-weight: 700;
+  padding-inline-end: 8px;
+}
+
+ion-modal.notification-log-detail-modal .notification-log-detail-modal__time {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0 0 14px 0;
+}
+
+ion-modal.notification-log-detail-modal .notification-log-detail-modal__text {
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #222;
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 /* Ensure ion-content doesn't overlap bottom navigation */

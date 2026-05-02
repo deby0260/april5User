@@ -10,42 +10,6 @@
   background: #FFFDFD;
 }
 
-.header-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 30px;
-  position: relative;
-
-  .back-button {
-    --color: #129CAE;
-    --padding-start: 0;
-    --padding-end: 0;
-    position: absolute;
-    left: 0;
-    z-index: 10;
-  }
-
-  .logo-container {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-
-    .logo {
-      display: flex;
-      align-items: center;
-
-      img {
-        width: 160px;
-        height: auto;
-        display: block;
-        user-select: none;
-        -webkit-user-drag: none;
-      }
-    }
-  }
-}
-
 .qr-content {
   flex: 1;
   display: flex;

@@ -3,11 +3,13 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { BottomNavigationComponent } from './bottom-navigation/bottom-navigation.component';
 import { EmergencyBannerComponent } from './emergency-banner/emergency-banner.component';
+import { ShellHeaderComponent } from './shell-header/shell-header.component';
 
 @NgModule({
   declarations: [
     BottomNavigationComponent,
-    EmergencyBannerComponent
+    EmergencyBannerComponent,
+    ShellHeaderComponent
   ],
   imports: [
     CommonModule,
@@ -15,7 +17,8 @@ import { EmergencyBannerComponent } from './emergency-banner/emergency-banner.co
   ],
   exports: [
     BottomNavigationComponent,
-    EmergencyBannerComponent
+    EmergencyBannerComponent,
+    ShellHeaderComponent
   ]
 })
 export class ComponentsModule { }
