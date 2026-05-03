@@ -8,6 +8,7 @@ import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
 import { LoadingController, ToastController, AlertController } from '@ionic/angular';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
+import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
 
 interface ScheduleItem {
   id: string;
@@ -62,7 +63,8 @@ export class ViewSchedulePage implements OnInit {
     private loadingController: LoadingController,
     private toastController: ToastController,
     private alertController: AlertController,
-    private roleAccessService: RoleAccessService
+    private roleAccessService: RoleAccessService,
+    private scheduleExitScanSync: ScheduleExitScanSyncService
   ) { }
 
   async ngOnInit() {
@@ -96,6 +98,7 @@ export class ViewSchedulePage implements OnInit {
   async checkAndCompleteOverdueSchedules() {
     try {
       console.log('🕐 Checking for overdue schedules...');
+      await this.loadScheduleData({ silent: true });
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes(); 
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
@@ -308,8 +311,11 @@ export class ViewSchedulePage implements OnInit {
     }
   }
 
-  async loadScheduleData() {
-    this.isLoading = true;
+  async loadScheduleData(opts?: { silent?: boolean }) {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      this.isLoading = true;
+    }
     try {
       const currentUser = this.authService.getCurrentUser();
 
@@ -324,6 +330,8 @@ export class ViewSchedulePage implements OnInit {
       }
 
       this.familyName = family.name;
+
+      await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
 
       
       const schedulesCollection = collection(this.firestore, 'Schedules');
@@ -383,7 +391,9 @@ export class ViewSchedulePage implements OnInit {
     } catch (error) {
       console.error('Error loading schedules:', error);
     } finally {
-      this.isLoading = false;
+      if (!silent) {
+        this.isLoading = false;
+      }
     }
   }
 

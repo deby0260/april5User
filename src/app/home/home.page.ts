@@ -7,6 +7,7 @@ import { FamilyService } from '../services/family.service';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
+import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
 import { Firestore, collection, query, where, getDocs, addDoc } from '@angular/fire/firestore';
 
 interface WeatherData {
@@ -64,7 +65,8 @@ export class HomePage implements OnInit {
     private roleAccessService: RoleAccessService,
     private firestore: Firestore,
     private panicService: PanicService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private scheduleExitScanSync: ScheduleExitScanSyncService
   ) { }
 
   async ngOnInit() {
@@ -229,6 +231,8 @@ export class HomePage implements OnInit {
         this.upcomingPickups = [];
         return;
       }
+
+      await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
 
       const schedulesCollection = collection(this.firestore, 'Schedules');
       const allSchedulesQuery = query(
