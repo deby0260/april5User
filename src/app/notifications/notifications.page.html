@@ -96,51 +96,55 @@
   </div>
 </ion-content>
 
-<ion-modal
-  [isOpen]="detailModalOpen"
-  [initialBreakpoint]="0.55"
-  [breakpoints]="[0, 0.55, 0.9]"
-  [handle]="true"
-  cssClass="notification-detail-modal"
-  (didDismiss)="onDetailModalDidDismiss()">
-  <ng-template>
-    <ion-header>
+<!-- Compact floating card (~half screen); tap dimmed backdrop, Back, or Done to close -->
+<div
+  class="notification-detail-root"
+  *ngIf="detailModalOpen && detailNotification as d"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="notification-detail-dialog-title"
+  (click)="closeDetailModal()">
+  <section class="notification-detail-root__panel" (click)="$event.stopPropagation()">
+    <ion-header class="ion-no-border">
       <ion-toolbar>
-        <ion-title class="notification-detail-title">{{ detailNotification?.title || 'Notification' }}</ion-title>
+        <ion-buttons slot="start">
+          <ion-button fill="clear" aria-label="Back to notifications" (click)="closeDetailModal()">
+            <ion-icon slot="icon-only" name="chevron-back"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+        <ion-title id="notification-detail-dialog-title" class="notification-detail-title">{{ d.title }}</ion-title>
         <ion-buttons slot="end">
           <ion-button fill="clear" (click)="closeDetailModal()">Done</ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
-    <ion-content class="notification-detail-content ion-padding">
-      <p class="detail-time" *ngIf="detailNotification">{{ detailNotification.time }}</p>
-      <p class="detail-body" *ngIf="detailNotification">{{ formatNotificationDisplayMessage(detailNotification) }}</p>
+    <div class="notification-detail-scroll ion-padding">
+      <p class="detail-time">{{ d.time }}</p>
+      <p class="detail-body">{{ formatNotificationDisplayMessage(d) }}</p>
 
-      <ng-container *ngIf="detailNotification as d">
-        <div
-          class="join-status detail-status"
-          *ngIf="d.type === 'join_request' && d.joinRequestStatus && d.joinRequestStatus !== 'pending'">
-          <div class="status-pill" [class.approved]="d.joinRequestStatus === 'approved'" [class.denied]="d.joinRequestStatus === 'denied'">
-            <ion-icon [name]="d.joinRequestStatus === 'approved' ? 'checkmark-circle' : 'close-circle'"></ion-icon>
-            <span>{{ d.joinRequestStatus === 'approved' ? 'Approved' : 'Denied' }}</span>
-          </div>
-          <div class="status-subtext">
-            {{ d.joinRequestStatus === 'approved'
-              ? ('Member added as ' + (d.joinRequestRole || 'companion'))
-              : 'Request was denied' }}
-          </div>
+      <div
+        class="join-status detail-status"
+        *ngIf="d.type === 'join_request' && d.joinRequestStatus && d.joinRequestStatus !== 'pending'">
+        <div class="status-pill" [class.approved]="d.joinRequestStatus === 'approved'" [class.denied]="d.joinRequestStatus === 'denied'">
+          <ion-icon [name]="d.joinRequestStatus === 'approved' ? 'checkmark-circle' : 'close-circle'"></ion-icon>
+          <span>{{ d.joinRequestStatus === 'approved' ? 'Approved' : 'Denied' }}</span>
         </div>
+        <div class="status-subtext">
+          {{ d.joinRequestStatus === 'approved'
+            ? ('Member added as ' + (d.joinRequestRole || 'companion'))
+            : 'Request was denied' }}
+        </div>
+      </div>
 
-        <div class="detail-actions" *ngIf="d.type === 'join_request' && d.joinRequestId && (!d.joinRequestStatus || d.joinRequestStatus === 'pending')">
-          <ion-button expand="block" color="primary" (click)="detailRespondJoin()">Respond to request</ion-button>
-        </div>
-        <div class="detail-actions" *ngIf="d.type === 'password_change_required' && !d.passwordChanged">
-          <ion-button expand="block" color="warning" (click)="detailChangePassword()">
-            <ion-icon name="lock-closed" slot="start"></ion-icon>
-            Change password
-          </ion-button>
-        </div>
-      </ng-container>
-    </ion-content>
-  </ng-template>
-</ion-modal>
+      <div class="detail-actions" *ngIf="d.type === 'join_request' && d.joinRequestId && (!d.joinRequestStatus || d.joinRequestStatus === 'pending')">
+        <ion-button expand="block" color="primary" (click)="detailRespondJoin()">Respond to request</ion-button>
+      </div>
+      <div class="detail-actions" *ngIf="d.type === 'password_change_required' && !d.passwordChanged">
+        <ion-button expand="block" color="warning" (click)="detailChangePassword()">
+          <ion-icon name="lock-closed" slot="start"></ion-icon>
+          Change password
+        </ion-button>
+      </div>
+    </div>
+  </section>
+</div>

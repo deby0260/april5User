@@ -214,40 +214,6 @@ ion-modal, ion-popover, ion-alert, ion-loading, ion-toast {
   z-index: 9998 !important;
 }
 
-/* Notification detail sheet (inline modal from notifications page) */
-ion-modal.notification-detail-modal {
-  --border-radius: 16px 16px 0 0;
-  --backdrop-opacity: 0.45;
-}
-
-ion-modal.notification-detail-modal .notification-detail-title {
-  font-size: 1rem;
-  font-weight: 700;
-  padding-inline-end: 8px;
-}
-
-ion-modal.notification-detail-modal .notification-detail-content .detail-time {
-  font-size: 0.8rem;
-  color: #999;
-  margin: 0 0 12px 0;
-}
-
-ion-modal.notification-detail-modal .notification-detail-content .detail-body {
-  font-size: 1rem;
-  line-height: 1.5;
-  color: #333;
-  margin: 0 0 16px 0;
-  white-space: pre-wrap;
-}
-
-ion-modal.notification-detail-modal .notification-detail-content .detail-status {
-  margin-bottom: 16px;
-}
-
-ion-modal.notification-detail-modal .notification-detail-content .detail-actions {
-  margin-top: 8px;
-}
-
 /* Notification log: centered card modal (not bottom sheet) */
 ion-modal.notification-log-detail-modal {
   --width: min(420px, 92vw);

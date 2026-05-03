@@ -219,26 +219,20 @@ export class NotificationsPage implements OnInit {
 
   closeDetailModal(): void {
     this.detailModalOpen = false;
-  }
-
-  onDetailModalDidDismiss(): void {
-    this.detailModalOpen = false;
     this.detailNotification = null;
   }
 
   detailRespondJoin(): void {
     const n = this.detailNotification;
     if (!n?.joinRequestId) return;
-    this.detailModalOpen = false;
-    this.detailNotification = null;
+    this.closeDetailModal();
     setTimeout(() => void this.handleJoinRequestNotification(n), 200);
   }
 
   detailChangePassword(): void {
     const n = this.detailNotification;
     if (!n) return;
-    this.detailModalOpen = false;
-    this.detailNotification = null;
+    this.closeDetailModal();
     setTimeout(() => void this.handlePasswordChangeNotification(n), 200);
   }
 

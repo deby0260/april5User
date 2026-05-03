@@ -42,8 +42,8 @@
          [class.active]="isCurrentRoute('/notification-log') || isCurrentRoute('/notifications')"
          [class.disabled-nav]="!userHasFamily"
          (click)="navigateToMenu()">
-      <ion-icon name="notifications"></ion-icon>
-      <span>Notification</span>
+      <ion-icon name="reader"></ion-icon>
+      <span>Pick Up Log</span>
       <div class="nav-lock" *ngIf="!userHasFamily">
         <ion-icon name="lock-closed" class="tiny-lock"></ion-icon>
       </div>
