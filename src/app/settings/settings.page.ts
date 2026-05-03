@@ -2,10 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService, UserData } from '../services/auth';
 import { AlertController, ToastController } from '@ionic/angular';
+import { Firestore, doc, setDoc } from '@angular/fire/firestore';
 
 interface AppSettings {
   appNotifications: boolean;
   smsNotifications: boolean;
+  emailNotifications: boolean;
   darkMode: boolean;
   language: string;
 }
@@ -20,6 +22,7 @@ export class SettingsPage implements OnInit {
   settings: AppSettings = {
     appNotifications: true,
     smsNotifications: false,
+    emailNotifications: false,
     darkMode: false,
     language: 'English'
   };
@@ -29,6 +32,7 @@ export class SettingsPage implements OnInit {
   constructor(
     private router: Router,
     private authService: AuthService,
+    private firestore: Firestore,
     private alertController: AlertController,
     private toastController: ToastController
   ) { }
@@ -52,7 +56,24 @@ export class SettingsPage implements OnInit {
   saveSettings() {
     
     localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
+    void this.syncEmailNotificationPreferenceToProfile();
     this.showToast('Settings saved successfully');
+  }
+
+  private async syncEmailNotificationPreferenceToProfile() {
+    const u = this.currentUser;
+    if (!u?.uid) {
+      return;
+    }
+    try {
+      await setDoc(
+        doc(this.firestore, 'Registerd', u.uid),
+        { emailNotifications: this.settings.emailNotifications },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Could not sync email notification preference to profile', e);
+    }
   }
 
   async toggleDarkMode() {
@@ -169,6 +190,7 @@ export class SettingsPage implements OnInit {
             this.settings = {
               appNotifications: true,
               smsNotifications: false,
+              emailNotifications: false,
               darkMode: false,
               language: 'English'
             };

@@ -35,6 +35,18 @@
             (ionChange)="saveSettings()">
           </ion-toggle>
         </div>
+
+        <div class="setting-item">
+          <span class="setting-label">Email me a copy of in-app notifications</span>
+          <ion-toggle
+            [(ngModel)]="settings.emailNotifications"
+            class="setting-toggle"
+            (ionChange)="saveSettings()">
+          </ion-toggle>
+        </div>
+        <p class="setting-hint" *ngIf="settings.emailNotifications && currentUser as cu">
+          Copies go to {{ cu.email }} when you open Notifications (requires Firebase Trigger Email + rules).
+        </p>
       </div>
     </div>
 

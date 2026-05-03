@@ -13,5 +13,7 @@ export const environment = {
     messagingSenderId: "418034723029",
     appId: "1:418034723029:web:9f9bfea5f62a159bb91a5c",
     measurementId: "G-S18Q88ZZ29"
-  }
+  },
+  notificationEmailCollection: 'mail',
+  maxNotificationEmailsPerSync: 30,
 };

@@ -19,7 +19,11 @@ export const environment = {
     messagingSenderId: "418034723029",
     appId: "1:418034723029:web:9f9bfea5f62a159bb91a5c",
     measurementId: "G-S18Q88ZZ29"
-  }
+  },
+  /** Firestore collection for the "Trigger Email from Firestore" extension (default: `mail`). */
+  notificationEmailCollection: 'mail',
+  /** Cap how many notification emails are queued per visit to the Notifications screen. */
+  maxNotificationEmailsPerSync: 30,
 };
 
 /*

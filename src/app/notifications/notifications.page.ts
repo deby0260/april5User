@@ -5,6 +5,7 @@ import { AuthService } from '../services/auth';
 import { JoinRequestService, JoinRequest } from '../services/join-request.service';
 import { FamilyService } from '../services/family.service';
 import { PasswordChangeService } from '../services/password-change.service';
+import { NotificationEmailForwardService } from '../services/notification-email-forward.service';
 import { AlertController, ToastController, LoadingController, ModalController } from '@ionic/angular';
 
 interface Notification {
@@ -68,6 +69,7 @@ export class NotificationsPage implements OnInit {
     private joinRequestService: JoinRequestService,
     private familyService: FamilyService,
     private passwordChangeService: PasswordChangeService,
+    private notificationEmailForwardService: NotificationEmailForwardService,
     private alertController: AlertController,
     private toastController: ToastController,
     private loadingController: LoadingController,
@@ -91,6 +93,18 @@ export class NotificationsPage implements OnInit {
       this.notifications = [...announcementItems, ...userItems].sort(
         (a, b) => b.sortTime - a.sortTime
       );
+
+      if (currentUser?.email && this.notificationEmailForwardService.isEmailForwardingEnabled()) {
+        await this.notificationEmailForwardService.forwardNewNotifications(
+          this.notifications.map((n) => ({
+            id: n.id,
+            title: n.title,
+            displayMessage: this.formatNotificationDisplayMessage(n),
+            time: n.time,
+          })),
+          currentUser.email
+        );
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
