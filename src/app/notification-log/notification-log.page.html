@@ -11,7 +11,7 @@
         <div class="notifications-group">
           <div *ngFor="let notification of todayNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
             <div class="notification-icon-container">
-              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+              <ion-icon [name]="logIconName(notification)" class="status-icon" [ngClass]="logIconClass(notification)"></ion-icon>
             </div>
             <div class="notification-content">
               <div class="notification-header">
@@ -29,7 +29,7 @@
         <div class="notifications-group">
           <div *ngFor="let notification of yesterdayNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
             <div class="notification-icon-container">
-              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+              <ion-icon [name]="logIconName(notification)" class="status-icon" [ngClass]="logIconClass(notification)"></ion-icon>
             </div>
             <div class="notification-content">
               <div class="notification-header">
@@ -46,7 +46,7 @@
         <div class="notifications-group">
           <div *ngFor="let notification of olderNotifications" class="notification-item clickable" (click)="onNotificationClick(notification)">
             <div class="notification-icon-container">
-              <ion-icon name="checkmark-circle" class="status-icon blue"></ion-icon>
+              <ion-icon [name]="logIconName(notification)" class="status-icon" [ngClass]="logIconClass(notification)"></ion-icon>
             </div>
             <div class="notification-content">
               <div class="notification-header">
@@ -61,8 +61,8 @@
 
       <div class="empty-state" *ngIf="todayNotifications.length === 0 && yesterdayNotifications.length === 0 && olderNotifications.length === 0">
         <ion-icon name="notifications-outline" class="empty-icon"></ion-icon>
-        <h3>No Pickup Notifications</h3>
-        <p>You'll see notifications here when children are picked up.</p>
+        <h3>No pickup activity yet</h3>
+        <p>You'll see completed pickups and school building check-ins or check-outs when the admin scans your family's QR code.</p>
       </div>
     </div>
   </div>

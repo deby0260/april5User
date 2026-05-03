@@ -67,8 +67,12 @@ export class ViewSchedulePage implements OnInit {
 
   async ngOnInit() {
     this.userRole = await this.roleAccessService.getUserRole();
-    await this.loadScheduleData();
     this.startAutomaticScheduleCompletion();
+  }
+
+  /** Reload from Firestore whenever the page is shown (tab/back from scheduling), not only on first create. */
+  async ionViewWillEnter() {
+    await this.loadScheduleData();
   }
 
   startAutomaticScheduleCompletion() {
