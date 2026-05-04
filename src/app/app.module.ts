@@ -10,6 +10,7 @@ import { provideFirestore, getFirestore } from '@angular/fire/firestore';
 import { provideAuth, getAuth } from '@angular/fire/auth';
 import { provideAnalytics, getAnalytics } from '@angular/fire/analytics';
 import { provideStorage, getStorage } from '@angular/fire/storage';
+import { provideFunctions, getFunctions } from '@angular/fire/functions';
 import { environment } from '../environments/environment';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -30,7 +31,8 @@ import { ComponentsModule } from './components/components.module';
     provideFirestore(() => getFirestore()),
     provideAuth(() => getAuth()),
     provideAnalytics(() => getAnalytics()),
-    provideStorage(() => getStorage())
+    provideStorage(() => getStorage()),
+    provideFunctions(() => getFunctions(undefined, environment.firebaseFunctionsRegion))
   ],
   bootstrap: [AppComponent],
 })

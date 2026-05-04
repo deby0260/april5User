@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendSmsOnNotificationCreate = void 0;
+exports.sendNotificationDigestEmails = exports.sendSmsOnNotificationCreate = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const twilio_1 = __importDefault(require("twilio"));
@@ -48,6 +48,25 @@ function getTwilioConfig() {
     }
     return { accountSid, authToken, fromNumber, defaultCc };
 }
+function getResendRepoDefaults() {
+    try {
+        return require("../resend-config.js");
+    }
+    catch {
+        return {};
+    }
+}
+function getResendConfig() {
+    const cfg = functions.config().resend || {};
+    const repo = getResendRepoDefaults();
+    const apiKey = (cfg?.api_key?.trim?.() || String(repo.RESEND_API_KEY || "").trim()) || null;
+    const from = (cfg?.from?.trim?.() || String(repo.RESEND_FROM || "").trim()) || null;
+    if (!apiKey || !from) {
+        functions.logger.warn('Resend not configured. Add functions/resend-config.js or: firebase functions:config:set resend.api_key="re_..." resend.from="onboarding@resend.dev"');
+        return null;
+    }
+    return { apiKey, from };
+}
 async function getContactNumberForUid(uid) {
     if (!uid || uid === "system" || uid === "system_auto" || uid === "auto") {
         return null;
@@ -63,9 +82,6 @@ async function getContactNumberForUid(uid) {
     const trimmed = raw.trim();
     return trimmed.length ? trimmed : null;
 }
-/**
- * Best-effort E.164 for Twilio. Default country code from config (63 = Philippines).
- */
 function toE164(raw, defaultCc) {
     const s = raw.trim();
     if (!s) {
@@ -135,5 +151,84 @@ exports.sendSmsOnNotificationCreate = functions.firestore
         functions.logger.error("Twilio SMS failed", err);
     }
     return null;
+});
+async function sendOneResend(apiKey, from, to, subject, text, html) {
+    const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ from, to: [to], subject, text, html }),
+    });
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Resend ${res.status}: ${errText}`);
+    }
+}
+function escapeHtml(s) {
+    return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+/**
+ * Sends notification digest emails via Resend. API key lives in functions config only.
+ * Caller must be signed in; destination is always that user's Firebase Auth email.
+ */
+exports.sendNotificationDigestEmails = functions
+    .region("us-central1")
+    .https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+    }
+    const uid = context.auth.uid;
+    const regSnap = await admin.firestore().doc(`Registerd/${uid}`).get();
+    if (regSnap.exists && regSnap.get("emailNotifications") === false) {
+        return { emailedIds: [] };
+    }
+    let to = context.auth.token.email?.trim();
+    if (!to) {
+        const user = await admin.auth().getUser(uid);
+        to = user.email?.trim() ?? "";
+    }
+    if (!to) {
+        throw new functions.https.HttpsError("failed-precondition", "No email on this account.");
+    }
+    const resend = getResendConfig();
+    if (!resend) {
+        throw new functions.https.HttpsError("failed-precondition", "Resend is not configured on the server (resend.api_key and resend.from).");
+    }
+    const rawItems = data?.items;
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+        return { emailedIds: [] };
+    }
+    const max = 30;
+    const items = rawItems.slice(0, max).map((row) => {
+        const r = row;
+        return {
+            id: String(r.id ?? ""),
+            title: String(r.title ?? ""),
+            displayMessage: String(r.displayMessage ?? ""),
+            time: String(r.time ?? ""),
+        };
+    });
+    const emailedIds = [];
+    for (const n of items) {
+        if (!n.id)
+            continue;
+        const subject = `FetchSafe: ${n.title}`;
+        const text = `${n.time}\n\n${n.displayMessage}`;
+        const html = `<p><strong>${escapeHtml(n.time)}</strong></p><p>${escapeHtml(n.displayMessage).replace(/\n/g, "<br/>")}</p>`;
+        try {
+            await sendOneResend(resend.apiKey, resend.from, to, subject, text, html);
+            emailedIds.push(n.id);
+        }
+        catch (e) {
+            functions.logger.error("Resend send failed", { id: n.id, err: String(e) });
+        }
+    }
+    return { emailedIds };
 });
 //# sourceMappingURL=index.js.map

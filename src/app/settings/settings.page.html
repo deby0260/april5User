@@ -48,7 +48,7 @@
           </ion-toggle>
         </div>
         <p class="setting-hint" *ngIf="settings.emailNotifications && currentUser as cu">
-          Copies go to {{ cu.email }} when you open Notifications (requires Firebase Trigger Email + rules).
+          When you open the Notifications tab, copies can be emailed to {{ cu.email }}. Mail is sent through your configured backend (e.g. Vercel + Resend)—not Firebase Trigger Email.
         </p>
       </div>
     </div>

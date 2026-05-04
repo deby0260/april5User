@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/send-notification-digest.ts": {
+      "maxDuration": 60
+    }
+  }
+}

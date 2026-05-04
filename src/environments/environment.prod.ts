@@ -16,4 +16,8 @@ export const environment = {
   },
   notificationEmailCollection: 'mail',
   maxNotificationEmailsPerSync: 30,
+  notificationEmailMode: 'vercel_http' as const,
+  /** Set to your deployed Vercel project URL (Root Directory = vercel-server). */
+  notificationEmailVercelBaseUrl: '',
+  firebaseFunctionsRegion: 'us-central1',
 };

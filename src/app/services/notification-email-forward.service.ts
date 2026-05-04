@@ -1,5 +1,8 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, addDoc } from '@angular/fire/firestore';
+import { Functions, httpsCallable } from '@angular/fire/functions';
+import { Auth } from '@angular/fire/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { environment } from '../../environments/environment';
 
 const SETTINGS_KEY = 'fetchsafe-settings';
@@ -17,7 +20,11 @@ export interface EmailableNotificationItem {
   providedIn: 'root',
 })
 export class NotificationEmailForwardService {
-  constructor(private firestore: Firestore) {}
+  constructor(
+    private firestore: Firestore,
+    private functions: Functions,
+    private auth: Auth
+  ) {}
 
   isEmailForwardingEnabled(): boolean {
     try {
@@ -33,8 +40,8 @@ export class NotificationEmailForwardService {
   }
 
   /**
-   * Queues one email per notification (Firebase Extension: Trigger Email from Firestore).
-   * Collection defaults to `mail`. Ensure Firestore rules allow creates and the extension is installed.
+   * Sends one email per new notification: either Firestore `mail` docs (Trigger Email extension)
+   * or HTTPS callable that uses Resend on the server.
    */
   async forwardNewNotifications(
     items: EmailableNotificationItem[],
@@ -44,7 +51,6 @@ export class NotificationEmailForwardService {
       return;
     }
 
-    const collectionName = environment.notificationEmailCollection ?? 'mail';
     const maxPerSync = environment.maxNotificationEmailsPerSync ?? 30;
 
     const sentIds = this.loadSentIds();
@@ -54,6 +60,23 @@ export class NotificationEmailForwardService {
     }
 
     const batch = pending.slice(0, maxPerSync);
+
+    if (environment.notificationEmailMode === 'vercel_http') {
+      const base = environment.notificationEmailVercelBaseUrl?.trim();
+      if (!base) {
+        console.warn('notificationEmailVercelBaseUrl is not set; skipping email forward');
+        return;
+      }
+      await this.forwardViaVercel(base, batch, sentIds);
+      return;
+    }
+
+    if (environment.notificationEmailMode === 'resend_callable') {
+      await this.forwardViaResendCallable(batch, sentIds);
+      return;
+    }
+
+    const collectionName = environment.notificationEmailCollection ?? 'mail';
     const mailCol = collection(this.firestore, collectionName);
 
     for (const n of batch) {
@@ -75,6 +98,89 @@ export class NotificationEmailForwardService {
     }
 
     this.persistSentIds(sentIds);
+  }
+
+  private async forwardViaVercel(
+    baseUrl: string,
+    batch: EmailableNotificationItem[],
+    sentIds: Set<string>
+  ): Promise<void> {
+    try {
+      const user = await this.getFirebaseAuthUser();
+      if (!user) {
+        console.warn('No Firebase session; cannot call Vercel email API');
+        return;
+      }
+      const token = await user.getIdToken();
+      const url = `${baseUrl.replace(/\/$/, '')}/api/send-notification-digest`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: batch.map((n) => ({
+            id: n.id,
+            title: n.title,
+            displayMessage: n.displayMessage,
+            time: n.time,
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        console.warn('Vercel notification email failed:', response.status, text);
+        return;
+      }
+      const data = (await response.json()) as { emailedIds?: string[] };
+      const emailedIds = Array.isArray(data?.emailedIds) ? data.emailedIds : [];
+      for (const id of emailedIds) {
+        if (id) {
+          sentIds.add(id);
+        }
+      }
+      this.persistSentIds(sentIds);
+    } catch (e) {
+      console.warn('Vercel notification email request failed:', e);
+    }
+  }
+
+  /** First auth emission after persistence restore (authStateReady not in this firebase/auth build). */
+  private getFirebaseAuthUser(): Promise<User | null> {
+    return new Promise((resolve) => {
+      const unsub = onAuthStateChanged(this.auth, (u) => {
+        unsub();
+        resolve(u);
+      });
+    });
+  }
+
+  private async forwardViaResendCallable(
+    batch: EmailableNotificationItem[],
+    sentIds: Set<string>
+  ): Promise<void> {
+    try {
+      const fn = httpsCallable(this.functions, 'sendNotificationDigestEmails');
+      const res = await fn({
+        items: batch.map((n) => ({
+          id: n.id,
+          title: n.title,
+          displayMessage: n.displayMessage,
+          time: n.time,
+        })),
+      });
+      const data = res.data as { emailedIds?: string[] };
+      const emailedIds = Array.isArray(data?.emailedIds) ? data.emailedIds : [];
+      for (const id of emailedIds) {
+        if (id) {
+          sentIds.add(id);
+        }
+      }
+      this.persistSentIds(sentIds);
+    } catch (e) {
+      console.warn('Notification email via Resend callable failed (deploy functions + set resend config):', e);
+    }
   }
 
   private loadSentIds(): Set<string> {
