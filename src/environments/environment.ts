@@ -31,7 +31,7 @@ export const environment = {
    */
   notificationEmailMode: 'vercel_http' as 'firestore_queue' | 'resend_callable' | 'vercel_http',
   /** e.g. https://your-app.vercel.app — no trailing slash. Required when notificationEmailMode is vercel_http. */
-  notificationEmailVercelBaseUrl: '',
+  notificationEmailVercelBaseUrl: 'https://fetch-user-tan.vercel.app',
   /** Region where `sendNotificationDigestEmails` is deployed (must match Firebase). */
   firebaseFunctionsRegion: 'us-central1',
 };

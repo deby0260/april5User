@@ -13,7 +13,7 @@ function escapeHtml(s: string): string {
 
 function getAdminApp(): admin.app.App {
   if (!admin.apps.length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const raw = process.env['FIREBASE_SERVICE_ACCOUNT_JSON'];
     if (!raw?.trim()) {
       throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON');
     }
@@ -64,8 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.RESEND_FROM?.trim();
+  const apiKey = process.env['RESEND_API_KEY']?.trim();
+  const from = process.env['RESEND_FROM']?.trim();
   if (!apiKey || !from) {
     res.status(500).json({ error: 'Server missing RESEND_API_KEY or RESEND_FROM' });
     return;
@@ -112,10 +112,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const items = rawItems.slice(0, MAX_ITEMS).map((row: unknown) => {
       const r = row as Record<string, unknown>;
       return {
-        id: String(r.id ?? ''),
-        title: String(r.title ?? ''),
-        displayMessage: String(r.displayMessage ?? ''),
-        time: String(r.time ?? ''),
+        id: String(r['id'] ?? ''),
+        title: String(r['title'] ?? ''),
+        displayMessage: String(r['displayMessage'] ?? ''),
+        time: String(r['time'] ?? ''),
       };
     });
 

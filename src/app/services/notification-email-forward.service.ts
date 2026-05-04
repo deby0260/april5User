@@ -62,7 +62,7 @@ export class NotificationEmailForwardService {
     const batch = pending.slice(0, maxPerSync);
 
     if (environment.notificationEmailMode === 'vercel_http') {
-      const base = environment.notificationEmailVercelBaseUrl?.trim();
+      const base = this.normalizeVercelBaseUrl(environment.notificationEmailVercelBaseUrl);
       if (!base) {
         console.warn('notificationEmailVercelBaseUrl is not set; skipping email forward');
         return;
@@ -98,6 +98,14 @@ export class NotificationEmailForwardService {
     }
 
     this.persistSentIds(sentIds);
+  }
+
+  /** Accepts `https://host` or `host` (https prepended). No trailing slash. */
+  private normalizeVercelBaseUrl(raw: string | undefined): string {
+    const t = (raw ?? '').trim().replace(/\/$/, '');
+    if (!t) return '';
+    if (/^https?:\/\//i.test(t)) return t;
+    return `https://${t}`;
   }
 
   private async forwardViaVercel(

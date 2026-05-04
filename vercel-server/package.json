@@ -4,5 +4,9 @@
   "dependencies": {
     "@vercel/node": "^3.2.29",
     "firebase-admin": "^12.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "~5.4.0"
   }
 }
