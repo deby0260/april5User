@@ -391,7 +391,7 @@ export class FamilyService {
 
   async getFamilyMembers(familyName: string): Promise<FamilyMember[]> {
     try {
-      console.log('🔍 getFamilyMembers: Searching for family:', familyName);
+      console.log('getFamilyMembers: Searching for family:', familyName);
       const familiesCollection = collection(this.firestore, 'List Of Families');
 
       // Try querying with 'Family Name' first (new format)
@@ -404,7 +404,7 @@ export class FamilyService {
 
       // If no results, try with 'familyName' (old format)
       if (snapshot.empty) {
-        console.log('⚠️ No results with "Family Name", trying "familyName"');
+        console.log('No results with "Family Name", trying "familyName"');
         familyQuery = query(
           familiesCollection,
           where('familyName', '==', familyName)
@@ -412,7 +412,7 @@ export class FamilyService {
         snapshot = await getDocs(familyQuery);
       }
 
-      console.log('📄 getFamilyMembers: Found', snapshot.size, 'documents');
+      console.log('getFamilyMembers: Found', snapshot.size, 'documents');
 
       const members: FamilyMember[] = [];
       const seenUIDs = new Set<string>();
@@ -422,7 +422,7 @@ export class FamilyService {
       if (!snapshot.empty) {
         const firstDoc = snapshot.docs[0].data();
         originalCreatorName = firstDoc['Name of the Creator'] || '';
-        console.log('👑 Original creator name:', originalCreatorName);
+        console.log('Original creator name:', originalCreatorName);
       }
 
 
@@ -432,15 +432,15 @@ export class FamilyService {
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const uid = data['uid'];
-        console.log('📋 Document UID:', uid, 'Data keys:', Object.keys(data));
+        console.log('Document UID:', uid, 'Data keys:', Object.keys(data));
 
         // Check if this is a child record
         const childName = data['Childs Name'] || data['childsName'] || data['childName'] || data['Child Name'] || '';
         if (childName && childName.trim() !== '') {
-          console.log('👶 Found child record:', childName, 'with parent UID:', uid);
+          console.log('Found child record:', childName, 'with parent UID:', uid);
           // Even though this is a child record, it contains parent info, so we should extract it
         } else {
-          console.log('👤 Found parent record for UID:', uid);
+          console.log('Found parent record for UID:', uid);
         }
 
         // Add the UID to get parent info (whether it's from a parent record or a child record)
@@ -448,24 +448,24 @@ export class FamilyService {
           seenUIDs.add(uid);
           uniqueUIDs.push(uid);
           parentRecords.push(data);
-          console.log('✅ Added unique UID:', uid);
+          console.log('Added unique UID:', uid);
         }
       });
 
-      console.log('🔑 Unique UIDs found:', uniqueUIDs);
-      console.log('👥 Parent records found:', parentRecords.length);
+      console.log('Unique UIDs found:', uniqueUIDs);
+      console.log('Parent records found:', parentRecords.length);
 
       
       const registeredCollection = collection(this.firestore, 'Registerd');
 
       for (const uid of uniqueUIDs) {
         try {
-          console.log(`🔎 Looking up user data for UID: ${uid}`);
+          console.log(`Looking up user data for UID: ${uid}`);
           const userQuery = query(registeredCollection, where('uid', '==', uid));
           const userSnapshot = await getDocs(userQuery);
 
           if (!userSnapshot.empty) {
-            console.log(`✅ Found user in Registered collection for UID: ${uid}`);
+            console.log(`Found user in Registered collection for UID: ${uid}`);
             const userData = userSnapshot.docs[0].data();
 
 
@@ -475,7 +475,7 @@ export class FamilyService {
             const userFullName = userData['fullName'] || userData['email'] || '';
             if (originalCreatorName && userFullName === originalCreatorName) {
               memberRole = 'owner';
-              console.log(`👑 User is original creator: ${userFullName}`);
+              console.log(`User is original creator: ${userFullName}`);
             } else {
               // FIRST: Check familyRole from Registerd collection
               const familyRoleFromRegisterd = userData['familyRole'];
@@ -483,13 +483,13 @@ export class FamilyService {
                 const role = familyRoleFromRegisterd.toLowerCase();
                 if (role === 'parent' || role === 'parents') {
                   memberRole = 'parent';
-                  console.log(`✅ Role from Registerd collection (familyRole): parent`);
+                  console.log(`Role from Registerd collection (familyRole): parent`);
                 } else if (role === 'companion') {
                   memberRole = 'companion';
-                  console.log(`✅ Role from Registerd collection (familyRole): companion`);
+                  console.log(`Role from Registerd collection (familyRole): companion`);
                 } else if (role === 'owner') {
                   memberRole = 'owner';
-                  console.log(`✅ Role from Registerd collection (familyRole): owner`);
+                  console.log(`Role from Registerd collection (familyRole): owner`);
                 }
               } else {
                 // FALLBACK: Check Role from List Of Families collection
@@ -498,10 +498,10 @@ export class FamilyService {
                   const assignedRole = userFamilyDoc.data()['Role'];
                   if (assignedRole === 'owner' || assignedRole === 'parent' || assignedRole === 'companion') {
                     memberRole = assignedRole;
-                    console.log(`⚠️ Role from List Of Families (fallback): ${assignedRole}`);
+                    console.log(`Role from List Of Families (fallback): ${assignedRole}`);
                   } else {
                     memberRole = 'companion';
-                    console.log(`⚠️ No valid role found, defaulting to companion`);
+                    console.log(`No valid role found, defaulting to companion`);
                   }
                 }
               }
@@ -517,13 +517,13 @@ export class FamilyService {
               joinedDate: userData['createdAt'] || new Date(),
               uid: uid
             });
-            console.log(`✅ Added member from Registered: ${userData['fullName'] || userData['email']}`);
+            console.log(`Added member from Registered: ${userData['fullName'] || userData['email']}`);
           } else {
-            console.log(`❌ User not found in Registered collection for UID: ${uid}, checking family records`);
+            console.log(`User not found in Registered collection for UID: ${uid}, checking family records`);
             const userFamilyDoc = snapshot.docs.find(doc => doc.data()['uid'] === uid);
             if (userFamilyDoc) {
               const familyData = userFamilyDoc.data();
-              console.log(`📋 Found family record for UID ${uid}:`, familyData);
+              console.log(`Found family record for UID ${uid}:`, familyData);
               let memberRole: 'owner' | 'parent' | 'companion' = 'companion';
 
               const memberName = familyData['Parent Full Name'] || familyData['parentFullName'] || '';
@@ -548,9 +548,9 @@ export class FamilyService {
                 joinedDate: familyData['Date Created'] || new Date(),
                 uid: uid
               });
-              console.log(`✅ Added member from family record: ${memberName}`);
+              console.log(`Added member from family record: ${memberName}`);
             } else {
-              console.log(`❌ No family record found for UID: ${uid}`);
+              console.log(`No family record found for UID: ${uid}`);
             }
           }
         } catch (userError) {
@@ -648,7 +648,7 @@ export class FamilyService {
 
   async getFamilyChildren(familyName: string): Promise<any[]> {
     try {
-      console.log('🔍 getFamilyChildren: Searching for family:', familyName);
+      console.log('getFamilyChildren: Searching for family:', familyName);
       const familiesCollection = collection(this.firestore, 'List Of Families');
 
       // Try querying with 'Family Name' first (new format)
@@ -657,21 +657,21 @@ export class FamilyService {
 
       // If no results, try with 'familyName' (old format)
       if (querySnapshot.empty) {
-        console.log('⚠️ No results with "Family Name", trying "familyName"');
+        console.log('No results with "Family Name", trying "familyName"');
         q = query(familiesCollection, where('familyName', '==', familyName));
         querySnapshot = await getDocs(q);
       }
 
-      console.log('📄 getFamilyChildren: Found', querySnapshot.size, 'documents');
+      console.log('getFamilyChildren: Found', querySnapshot.size, 'documents');
 
       const children: any[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        console.log('📋 Document data:', data);
+        console.log('Document data:', data);
 
         // Check for child name in multiple possible field formats
         const childName = data['Childs Name'] || data['childsName'] || data['childName'] || data['Child Name'] || '';
-        console.log('👶 Checking for child name:', childName);
+        console.log('Checking for child name:', childName);
 
         if (childName && childName.trim() !== '') {
           const child = {
@@ -679,17 +679,17 @@ export class FamilyService {
             grade: data['Grade Level'] || data['gradeLevel'] || '',
             profilePicture: data['Child Profile Picture'] || data['childProfilePicture'] || ''
           };
-          console.log('✅ Adding child:', child);
+          console.log('Adding child:', child);
           children.push(child);
         } else {
-          console.log('❌ No child name found in document');
+          console.log('No child name found in document');
         }
       });
 
-      console.log('👶 Final children array:', children);
+      console.log('Final children array:', children);
       return children;
     } catch (error) {
-      console.error('❌ Error getting family children:', error);
+      console.error('Error getting family children:', error);
       return [];
     }
   }

@@ -4,7 +4,15 @@ import { PushNotifications, Token, PushNotificationSchema, ActionPerformed } fro
 import { LocalNotifications, LocalNotificationSchema } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { AuthService } from './auth';
-import { Firestore, collection, doc, setDoc, updateDoc, getDoc } from '@angular/fire/firestore';
+import {
+  Firestore,
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  getDoc,
+  deleteField,
+} from '@angular/fire/firestore';
 import { environment } from '../../environments/environment';
 
 export interface NotificationData {
@@ -24,6 +32,10 @@ export interface NotificationData {
 })
 export class NotificationService {
   private isInitialized = false;
+  /** Push + local listeners attached (reset when user turns off app notifications). */
+  private nativeStackAttached = false;
+
+  private static readonly SETTINGS_STORAGE_KEY = 'fetchsafe-settings';
 
   constructor(
     private platform: Platform,
@@ -31,18 +43,109 @@ export class NotificationService {
     private firestore: Firestore
   ) {}
 
+  /**
+   * Reads the Settings toggle (localStorage). Default true if unset so existing users keep behavior.
+   */
+  readAppNotificationsEnabled(): boolean {
+    try {
+      const raw = localStorage.getItem(NotificationService.SETTINGS_STORAGE_KEY);
+      if (!raw) return true;
+      const parsed = JSON.parse(raw) as { appNotifications?: boolean };
+      return parsed.appNotifications !== false;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Apply the "Enable app notifications" setting on the device: permissions, FCM registration, listeners.
+   * Call after saving settings (and when enabling) so the phone can receive local + push alerts.
+   */
+  async syncAppNotificationPreference(enabled: boolean): Promise<void> {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    if (!enabled) {
+      await this.cancelAllPendingLocalNotifications();
+      try {
+        await PushNotifications.removeAllListeners();
+      } catch {
+        /* noop */
+      }
+      try {
+        await LocalNotifications.removeAllListeners();
+      } catch {
+        /* noop */
+      }
+      try {
+        await PushNotifications.unregister();
+      } catch {
+        /* noop */
+      }
+      this.nativeStackAttached = false;
+      this.isInitialized = false;
+      await this.clearPushTokenInProfile();
+      return;
+    }
+    await this.attachNativeNotificationStack();
+    this.isInitialized = true;
+  }
+
   async initialize() {
     if (this.isInitialized) return;
 
     try {
-      if (Capacitor.isNativePlatform()) {
-        await this.initializePushNotifications();
-        await this.initializeLocalNotifications();
+      if (!Capacitor.isNativePlatform()) {
+        this.isInitialized = true;
+        console.log('Notification service initialized (web — no native push)');
+        return;
       }
+      if (!this.readAppNotificationsEnabled()) {
+        console.log('App notifications disabled in settings; skipping native setup until enabled');
+        return;
+      }
+      await this.attachNativeNotificationStack();
       this.isInitialized = true;
-      console.log('✅ Notification service initialized');
+      console.log('Notification service initialized');
     } catch (error) {
-      console.error('❌ Error initializing notifications:', error);
+      console.error('Error initializing notifications:', error);
+    }
+  }
+
+  private async attachNativeNotificationStack(): Promise<void> {
+    if (this.nativeStackAttached) {
+      return;
+    }
+    await this.initializePushNotifications();
+    await this.initializeLocalNotifications();
+    this.nativeStackAttached = true;
+  }
+
+  private async cancelAllPendingLocalNotifications(): Promise<void> {
+    try {
+      const { notifications } = await LocalNotifications.getPending();
+      if (!notifications?.length) {
+        return;
+      }
+      await LocalNotifications.cancel({
+        notifications: notifications.map((n) => ({ id: n.id })),
+      });
+    } catch (e) {
+      console.warn('Could not cancel pending local notifications:', e);
+    }
+  }
+
+  private async clearPushTokenInProfile(): Promise<void> {
+    try {
+      const currentUser = this.authService.getCurrentUser();
+      if (!currentUser) return;
+      const userDocRef = doc(this.firestore, 'users', currentUser.uid);
+      await updateDoc(userDocRef, {
+        pushToken: deleteField(),
+        lastTokenUpdate: deleteField(),
+      });
+    } catch (e) {
+      console.warn('Could not clear push token (missing users doc is OK):', e);
     }
   }
 
@@ -62,23 +165,23 @@ export class NotificationService {
 
       
       PushNotifications.addListener('registration', async (token: Token) => {
-        console.log('📱 Push registration token:', token.value);
+        console.log('Push registration token:', token.value);
         await this.savePushToken(token.value);
       });
 
       
       PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
-        console.log('📨 Push notification received:', notification);
+        console.log('Push notification received:', notification);
         this.handlePushNotificationReceived(notification);
       });
 
       
       PushNotifications.addListener('pushNotificationActionPerformed', (notification: ActionPerformed) => {
-        console.log('👆 Push notification action performed:', notification);
+        console.log('Push notification action performed:', notification);
         this.handlePushNotificationAction(notification);
       });
     } else {
-      console.warn('⚠️ Push notification permission not granted');
+      console.warn('Push notification permission not granted');
     }
   }
 
@@ -87,15 +190,15 @@ export class NotificationService {
     const permission = await LocalNotifications.requestPermissions();
     
     if (permission.display === 'granted') {
-      console.log('✅ Local notification permission granted');
+      console.log('Local notification permission granted');
 
       
       LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
-        console.log('👆 Local notification action performed:', notification);
+        console.log('Local notification action performed:', notification);
         this.handleLocalNotificationAction(notification);
       });
     } else {
-      console.warn('⚠️ Local notification permission not granted');
+      console.warn('Local notification permission not granted');
     }
   }
 
@@ -110,17 +213,18 @@ export class NotificationService {
         lastTokenUpdate: new Date()
       });
 
-      console.log('✅ Push token saved to Firestore');
+      console.log('Push token saved to Firestore');
     } catch (error) {
-      console.error('❌ Error saving push token:', error);
+      console.error('Error saving push token:', error);
     }
   }
 
   private handlePushNotificationReceived(notification: PushNotificationSchema) {
-    
-    console.log('📨 Handling push notification:', notification);
-    
-    
+    if (!this.readAppNotificationsEnabled()) {
+      return;
+    }
+    console.log('Handling push notification:', notification);
+
     if (notification.data?.type === 'panic') {
       this.handlePanicNotification(notification);
     }
@@ -128,27 +232,27 @@ export class NotificationService {
 
   private handlePushNotificationAction(notification: ActionPerformed) {
     
-    console.log('👆 User tapped push notification:', notification);
+    console.log('User tapped push notification:', notification);
     
     
     if (notification.notification.data?.actionUrl) {
       
-      console.log('🔗 Navigate to:', notification.notification.data.actionUrl);
+      console.log('Navigate to:', notification.notification.data.actionUrl);
     }
   }
 
   private handleLocalNotificationAction(notification: any) {
     
-    console.log('👆 User tapped local notification:', notification);
+    console.log('User tapped local notification:', notification);
   }
 
   private handlePanicNotification(notification: PushNotificationSchema) {
     
-    console.log('🚨 Panic notification received:', notification);
+    console.log('Panic notification received:', notification);
     
     
     this.showLocalNotification({
-      title: '🚨 PANIC ALERT',
+      title: 'PANIC ALERT',
       body: notification.body || 'Emergency alert received',
       type: 'panic',
       timestamp: new Date(),
@@ -158,8 +262,12 @@ export class NotificationService {
 
   async showLocalNotification(notificationData: NotificationData) {
     try {
+      if (!this.readAppNotificationsEnabled()) {
+        console.log('Local notification suppressed (app notifications off in Settings)');
+        return;
+      }
       if (!Capacitor.isNativePlatform()) {
-        console.log('📱 Local notification (web):', notificationData);
+        console.log('Local notification (web):', notificationData);
         return;
       }
 
@@ -182,16 +290,19 @@ export class NotificationService {
         notifications: [notification]
       });
 
-      console.log('✅ Local notification scheduled');
+      console.log('Local notification scheduled');
     } catch (error) {
-      console.error('❌ Error showing local notification:', error);
+      console.error('Error showing local notification:', error);
     }
   }
 
   async sendPanicNotification(familyName: string, senderName: string) {
+    if (!this.readAppNotificationsEnabled()) {
+      return;
+    }
     try {
       const notificationData: NotificationData = {
-        title: '🚨 PANIC ALERT',
+        title: 'PANIC ALERT',
         body: `${senderName} has triggered a panic alert in ${familyName}`,
         type: 'panic',
         familyName: familyName,
@@ -207,13 +318,16 @@ export class NotificationService {
       
       await this.saveNotificationToHistory(notificationData);
 
-      console.log('✅ Panic notification sent');
+      console.log('Panic notification sent');
     } catch (error) {
-      console.error('❌ Error sending panic notification:', error);
+      console.error('Error sending panic notification:', error);
     }
   }
 
   async sendFamilyUpdateNotification(title: string, message: string, familyName: string) {
+    if (!this.readAppNotificationsEnabled()) {
+      return;
+    }
     try {
       const notificationData: NotificationData = {
         title: title,
@@ -228,13 +342,16 @@ export class NotificationService {
       await this.showLocalNotification(notificationData);
       await this.saveNotificationToHistory(notificationData);
 
-      console.log('✅ Family update notification sent');
+      console.log('Family update notification sent');
     } catch (error) {
-      console.error('❌ Error sending family update notification:', error);
+      console.error('Error sending family update notification:', error);
     }
   }
 
   async sendScheduleNotification(title: string, message: string, familyName: string) {
+    if (!this.readAppNotificationsEnabled()) {
+      return;
+    }
     try {
       const notificationData: NotificationData = {
         title: title,
@@ -249,9 +366,9 @@ export class NotificationService {
       await this.showLocalNotification(notificationData);
       await this.saveNotificationToHistory(notificationData);
 
-      console.log('✅ Schedule notification sent');
+      console.log('Schedule notification sent');
     } catch (error) {
-      console.error('❌ Error sending schedule notification:', error);
+      console.error('Error sending schedule notification:', error);
     }
   }
 
@@ -267,20 +384,20 @@ export class NotificationService {
         id: notificationRef.id
       });
 
-      console.log('✅ Notification saved to history');
+      console.log('Notification saved to history');
     } catch (error) {
-      console.error('❌ Error saving notification to history:', error);
+      console.error('Error saving notification to history:', error);
     }
   }
 
   async clearAllNotifications() {
     try {
       if (Capacitor.isNativePlatform()) {
-        await LocalNotifications.cancel({ notifications: [] });
+        await this.cancelAllPendingLocalNotifications();
       }
-      console.log('✅ All notifications cleared');
+      console.log('All notifications cleared');
     } catch (error) {
-      console.error('❌ Error clearing notifications:', error);
+      console.error('Error clearing notifications:', error);
     }
   }
 
@@ -298,7 +415,7 @@ export class NotificationService {
 
       return null;
     } catch (error) {
-      console.error('❌ Error getting push token:', error);
+      console.error('Error getting push token:', error);
       return null;
     }
   }
@@ -307,7 +424,7 @@ export class NotificationService {
   async sendTestNotification() {
     try {
       const testNotification: NotificationData = {
-        title: '🧪 Test Notification',
+        title: 'Test Notification',
         body: 'This is a test notification to verify the system is working correctly.',
         type: 'general',
         timestamp: new Date(),
@@ -316,9 +433,9 @@ export class NotificationService {
       };
 
       await this.showLocalNotification(testNotification);
-      console.log('✅ Test notification sent successfully');
+      console.log('Test notification sent successfully');
     } catch (error) {
-      console.error('❌ Error sending test notification:', error);
+      console.error('Error sending test notification:', error);
     }
   }
 }

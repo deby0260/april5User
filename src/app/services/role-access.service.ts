@@ -60,7 +60,7 @@ export class RoleAccessService {
           } else if (role === 'owner') {
             userRole = 'owner';
           }
-          console.log('✅ Role detected from Registerd collection:', userRole);
+          console.log('Role detected from Registerd collection:', userRole);
         } else {
           // Fallback: check List Of Families collection
           const members = await this.familyService.getFamilyMembers(family.name);
@@ -68,12 +68,12 @@ export class RoleAccessService {
 
           if (userMember) {
             userRole = userMember.role;
-            console.log('✅ Role detected from List Of Families:', userRole);
+            console.log('Role detected from List Of Families:', userRole);
           }
         }
       }
 
-      console.log('🎭 Final user role:', userRole, 'for family:', family.name);
+      console.log('Final user role:', userRole, 'for family:', family.name);
 
       return {
         role: userRole,

@@ -26,6 +26,9 @@
             (ionChange)="saveSettings()">
           </ion-toggle>
         </div>
+        <p class="setting-hint">
+          On iPhone or Android, allow notifications when prompted so pickup and schedule alerts can appear on this device.
+        </p>
 
         <div class="setting-item">
           <span class="setting-label">Enable SMS notifications</span>
@@ -90,28 +93,8 @@
     <div class="settings-section">
       <h3>Privacy & Security</h3>
       <div class="settings-group">
-        <div class="setting-item clickable" (click)="editPrivacy()">
-          <span class="setting-label">Privacy Settings</span>
-          <div class="setting-value">
-            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
-          </div>
-        </div>
-
         <div class="setting-item clickable" (click)="changePassword()">
           <span class="setting-label">Change Password</span>
-          <div class="setting-value">
-            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    
-    <div class="settings-section">
-      <h3>App Data</h3>
-      <div class="settings-group">
-        <div class="setting-item clickable" (click)="clearData()">
-          <span class="setting-label">Clear App Data</span>
           <div class="setting-value">
             <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
           </div>

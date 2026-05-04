@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { Capacitor } from '@capacitor/core';
 import { AuthService, UserData } from '../services/auth';
 import { AlertController, ToastController } from '@ionic/angular';
 import { Firestore, doc, setDoc } from '@angular/fire/firestore';
+import { NotificationService } from '../services/notification.service';
 
 interface AppSettings {
   appNotifications: boolean;
@@ -34,15 +36,19 @@ export class SettingsPage implements OnInit {
     private authService: AuthService,
     private firestore: Firestore,
     private alertController: AlertController,
-    private toastController: ToastController
+    private toastController: ToastController,
+    private notificationService: NotificationService
   ) { }
 
   ngOnInit() {
-    
     this.currentUser = this.authService.getCurrentUser();
-
-    
     this.loadSettings();
+  }
+
+  /** Reconcile native listeners if the user changed settings in another session or before login. */
+  async ionViewWillEnter() {
+    this.loadSettings();
+    await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
   }
 
   loadSettings() {
@@ -53,11 +59,19 @@ export class SettingsPage implements OnInit {
     }
   }
 
-  saveSettings() {
-    
+  async saveSettings() {
     localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
     void this.syncEmailNotificationPreferenceToProfile();
-    this.showToast('Settings saved successfully');
+    await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
+    if (!this.settings.appNotifications) {
+      await this.showToast('App notifications disabled on this device');
+    } else if (!Capacitor.isNativePlatform()) {
+      await this.showToast(
+        'Settings saved. Install the FetchSafe app on iOS or Android for lock-screen pickup alerts.'
+      );
+    } else {
+      await this.showToast('Settings saved successfully');
+    }
   }
 
   private async syncEmailNotificationPreferenceToProfile() {

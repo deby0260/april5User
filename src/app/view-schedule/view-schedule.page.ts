@@ -97,7 +97,7 @@ export class ViewSchedulePage implements OnInit {
 
   async checkAndCompleteOverdueSchedules() {
     try {
-      console.log('🕐 Checking for overdue schedules...');
+      console.log('Checking for overdue schedules...');
       await this.loadScheduleData({ silent: true });
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes(); 
@@ -116,7 +116,7 @@ export class ViewSchedulePage implements OnInit {
 
           
           if (currentTime > scheduleTimeMinutes) {
-            console.log(`⏰ Schedule overdue: ${schedule.childName} at ${schedule.time} (${scheduleTimeMinutes} minutes) - Current: ${currentTime} minutes`);
+            console.log(`Schedule overdue: ${schedule.childName} at ${schedule.time} (${scheduleTimeMinutes} minutes) - Current: ${currentTime} minutes`);
             schedulesToComplete.push(schedule);
           }
         }
@@ -128,7 +128,7 @@ export class ViewSchedulePage implements OnInit {
       }
 
     } catch (error) {
-      console.error('❌ Error checking overdue schedules:', error);
+      console.error('Error checking overdue schedules:', error);
     }
   }
 
@@ -149,7 +149,7 @@ export class ViewSchedulePage implements OnInit {
 
       return totalHours * 60 + minutes;
     } catch (error) {
-      console.error('❌ Error parsing time:', timeString, error);
+      console.error('Error parsing time:', timeString, error);
       return 0;
     }
   }
@@ -276,7 +276,7 @@ export class ViewSchedulePage implements OnInit {
 
   async automaticallyCompleteSchedule(schedule: ScheduleItem) {
     try {
-      console.log('🤖 Automatically completing schedule:', schedule.childName);
+      console.log('Automatically completing schedule:', schedule.childName);
 
   
       
@@ -303,11 +303,11 @@ export class ViewSchedulePage implements OnInit {
       const scheduleIndex = this.schedules.findIndex(s => s.id === schedule.id);
       if (scheduleIndex !== -1) {
         this.schedules.splice(scheduleIndex, 1);
-        console.log('✅ Automatically removed completed schedule from view');
+        console.log('Automatically removed completed schedule from view');
       }
 
     } catch (error) {
-      console.error('❌ Error automatically completing schedule:', error);
+      console.error('Error automatically completing schedule:', error);
     }
   }
 
@@ -343,18 +343,18 @@ export class ViewSchedulePage implements OnInit {
       const querySnapshot = await getDocs(familySchedulesQuery);
 
       this.schedules = [];
-      console.log('📊 Processing schedules from Firestore...');
+      console.log('Processing schedules from Firestore...');
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const scheduleStatus = data['Status'] || 'pending';
         const scheduleDate = data['Date'] || '';
 
-        console.log(`📅 Schedule ${doc.id}: Status = "${scheduleStatus}", Child = "${data['Childs Name']}", Date = "${scheduleDate}"`);
+        console.log(`Schedule ${doc.id}: Status = "${scheduleStatus}", Child = "${data['Childs Name']}", Date = "${scheduleDate}"`);
 
         
         if (scheduleStatus === 'pending') {
-          console.log(`✅ Including pending schedule: ${data['Childs Name']}`);
+          console.log(`Including pending schedule: ${data['Childs Name']}`);
           this.schedules.push({
             id: doc.id,
             date: data['Date'] || '',
@@ -373,7 +373,7 @@ export class ViewSchedulePage implements OnInit {
             completedBy: data['Completed By']
           });
         } else {
-          console.log(`❌ Filtering out completed schedule: ${data['Childs Name']}`);
+          console.log(`Filtering out completed schedule: ${data['Childs Name']}`);
         }
       });
 
@@ -432,7 +432,7 @@ export class ViewSchedulePage implements OnInit {
 
   async createAutomaticPickupNotificationLog(schedule: ScheduleItem, completedBy: string) {
     try {
-      console.log('🤖 Creating automatic pickup notification log for:', schedule.childName);
+      console.log('Creating automatic pickup notification log for:', schedule.childName);
 
       const pickupNotificationData = {
         type: 'pickup_completion',
@@ -451,20 +451,20 @@ export class ViewSchedulePage implements OnInit {
         createdAt: serverTimestamp()
       };
 
-      console.log('📄 Automatic notification data to save:', pickupNotificationData);
+      console.log('Automatic notification data to save:', pickupNotificationData);
 
       const notificationsCollection = collection(this.firestore, 'Notifications');
       const docRef = await addDoc(notificationsCollection, pickupNotificationData);
 
-      console.log('✅ Automatic pickup notification logged successfully with ID:', docRef.id);
+      console.log('Automatic pickup notification logged successfully with ID:', docRef.id);
     } catch (error) {
-      console.error('❌ Error creating automatic pickup notification log:', error);
+      console.error('Error creating automatic pickup notification log:', error);
     }
   }
 
   async sendAutomaticCapacitorNotification(schedule: ScheduleItem) {
     try {
-      const title = '🕐 Schedule Auto-Completed';
+      const title = 'Schedule Auto-Completed';
       const message = `${schedule.childName} pickup time has passed - automatically marked as completed`;
 
       await this.notificationService.sendScheduleNotification(
@@ -473,9 +473,9 @@ export class ViewSchedulePage implements OnInit {
         schedule.familyName
       );
 
-      console.log('✅ Automatic Capacitor notification sent');
+      console.log('Automatic Capacitor notification sent');
     } catch (error) {
-      console.error('❌ Error sending automatic Capacitor notification:', error);
+      console.error('Error sending automatic Capacitor notification:', error);
     }
   }
 

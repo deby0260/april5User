@@ -199,7 +199,7 @@ export class SchedulingPage implements OnInit {
         this.currentUserRole = userRole.role;
         this.canManageSchedule = userRole.canAccessScheduling;
         console.log(
-          '✅ Scheduling page - User role:',
+          'Scheduling page - User role:',
           this.currentUserRole,
           'Can manage schedule:',
           this.canManageSchedule
@@ -211,7 +211,7 @@ export class SchedulingPage implements OnInit {
         if (userMember) {
           this.currentUserRole = userMember.role;
           this.canManageSchedule = userMember.role === 'owner' || userMember.role === 'parent';
-          console.log('⚠️ Scheduling page - Fallback role from members:', this.currentUserRole);
+          console.log('Scheduling page - Fallback role from members:', this.currentUserRole);
         }
       }
     } catch (error) {

@@ -626,7 +626,7 @@ export class HomePage implements OnInit {
       await this.notificationService.sendTestNotification();
 
       const toast = await this.toastController.create({
-        message: '🧪 Test notification sent! Check your notification tray.',
+        message: 'Test notification sent. Check your notification tray.',
         duration: 3000,
         position: 'bottom',
         color: 'success'
@@ -636,7 +636,7 @@ export class HomePage implements OnInit {
       console.error('Error sending test notification:', error);
 
       const toast = await this.toastController.create({
-        message: '❌ Error sending test notification',
+        message: 'Error sending test notification',
         duration: 3000,
         position: 'bottom',
         color: 'danger'

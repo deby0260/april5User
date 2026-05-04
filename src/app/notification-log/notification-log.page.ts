@@ -159,7 +159,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       const family = await this.familyService.getUserFamily();
       if (!family) return;
 
-      console.log('🔍 Checking for completed schedules without notification logs...');
+      console.log('Checking for completed schedules without notification logs...');
 
       // Get all completed schedules for this family
       const schedulesCollection = collection(this.firestore, 'Schedules');
@@ -170,7 +170,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       );
 
       const schedulesSnapshot = await getDocs(completedSchedulesQuery);
-      console.log('📊 Found', schedulesSnapshot.size, 'completed schedules');
+      console.log('Found', schedulesSnapshot.size, 'completed schedules');
 
       // Get existing notification logs for this family
       const notificationsCollection = collection(this.firestore, 'Notifications');
@@ -190,7 +190,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         }
       });
 
-      console.log('📋 Found', existingScheduleIds.size, 'existing notification logs');
+      console.log('Found', existingScheduleIds.size, 'existing notification logs');
 
       const dismissedSchedules = this.loadDismissedPickupScheduleIds();
       let createdCount = 0;
@@ -199,7 +199,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         const scheduleData = scheduleDoc.data();
 
         if (!existingScheduleIds.has(scheduleId) && !dismissedSchedules.has(scheduleId)) {
-          console.log('📝 Creating missing notification log for schedule:', scheduleId);
+          console.log('Creating missing notification log for schedule:', scheduleId);
 
           const notificationData = {
             type: 'pickup_completion',
@@ -221,15 +221,15 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       }
 
       if (createdCount > 0) {
-        console.log(`✅ Created ${createdCount} missing notification logs`);
+        console.log(`Created ${createdCount} missing notification logs`);
 
         await this.loadPickupNotifications();
       } else {
-        console.log('✅ All completed schedules already have notification logs');
+        console.log('All completed schedules already have notification logs');
       }
 
     } catch (error) {
-      console.error('❌ Error creating missing notification logs:', error);
+      console.error('Error creating missing notification logs:', error);
     }
   }
 
@@ -254,7 +254,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       }
 
       
-      console.log('🔍 Querying pickup notifications for family:', family.name);
+      console.log('Querying pickup notifications for family:', family.name);
       const notificationsCollection = collection(this.firestore, 'Notifications');
       const q = query(
         notificationsCollection,
@@ -263,14 +263,14 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       );
 
       const querySnapshot = await getDocs(q);
-      console.log('📊 Found', querySnapshot.size, 'pickup notifications');
+      console.log('Found', querySnapshot.size, 'pickup notifications');
       const allNotifications: PickupNotification[] = [];
       const dismissedSchedules = this.loadDismissedPickupScheduleIds();
       const dismissedDocIds = this.loadDismissedPickupDocIds();
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data() as any;
-        console.log('📄 Processing notification:', docSnap.id, data);
+        console.log('Processing notification:', docSnap.id, data);
 
         if (dismissedDocIds.has(docSnap.id)) {
           return;
@@ -300,7 +300,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
           message: typeof data['message'] === 'string' ? data['message'] : undefined,
           source: 'notification',
         };
-        console.log('✅ Created notification object:', notification);
+        console.log('Created notification object:', notification);
         allNotifications.push(notification);
       });
 
@@ -483,7 +483,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
   /**
    * Child names for an exit scan: same calendar day as the scan and same fetcher UID as Schedules.
    * Prefer pending rows; if none (e.g. pickup was just marked completed by exit-scan sync), use completed
-   * so the building-exit card still shows who was picked up instead of a false "no matching" warning.
+   * so the exit-scan card still shows who was picked up instead of a false "no matching" warning.
    */
   private async resolveScheduledChildNamesForExit(
     familyName: string,

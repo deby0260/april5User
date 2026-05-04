@@ -40,7 +40,7 @@ export class PanicService {
 
     if (!hasFamily) {
       const restrictedAlert = await this.alertController.create({
-        header: '🚫 Access Restricted',
+        header: 'Access Restricted',
         message: 'You must join or create a family before using the panic alert feature.',
         buttons: [
           {
@@ -58,7 +58,7 @@ export class PanicService {
     }
 
     const alert = await this.alertController.create({
-      header: '🚨 EMERGENCY PANIC ALERT',
+      header: 'EMERGENCY PANIC ALERT',
       message: 'This will immediately notify all family members and administrators about your emergency.',
       backdropDismiss: false,
       buttons: [
@@ -166,7 +166,7 @@ export class PanicService {
 
         const panicNotificationData = {
           type: 'panic_alert',
-          title: '🚨 PANIC ALERT',
+          title: 'PANIC ALERT',
           message: `Emergency alert triggered by ${currentUser.fullName || currentUser.email || 'Family Member'}`,
           recipientId: member.uid,
           senderId: currentUser.uid,
@@ -187,7 +187,7 @@ export class PanicService {
       );
 
       console.log('Panic alert saved to database and sent to family members');
-      await this.showToast('🚨 Emergency alert sent! Admin and family notified.');
+      await this.showToast('Emergency alert sent. Admin and family notified.');
       
     } catch (error) {
       console.error('Error sending panic alert:', error);

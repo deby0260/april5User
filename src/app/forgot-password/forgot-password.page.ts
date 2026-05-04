@@ -103,7 +103,7 @@ export class ForgotPasswordPage implements OnInit {
 
 
       await this.showAlert(
-        'Reset Link Sent! 📧',
+        'Reset Link Sent',
         `A password reset link has been sent to ${this.email}. Please check your inbox (and spam folder) and follow the instructions to reset your password.\n\nThe link will expire in 1 hour.`
       );
 

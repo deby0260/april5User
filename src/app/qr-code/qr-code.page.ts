@@ -130,7 +130,7 @@ export class QrCodePage implements OnInit {
         const first = snap.docs[0].data() as any;
         const familyName = first['Family Name'] || first['familyName'];
         if (familyName) {
-          console.log('🏠 Found family as creator/owner:', familyName);
+          console.log('Found family as creator/owner:', familyName);
           return familyName;
         }
       }
@@ -148,7 +148,7 @@ export class QrCodePage implements OnInit {
         const familyRole = userData['familyRole'];
 
         if (familyName && familyRole) {
-          console.log(`🏠 Found family as ${familyRole} member:`, familyName);
+          console.log(`Found family as ${familyRole} member:`, familyName);
           return familyName;
         }
       }
@@ -165,29 +165,29 @@ export class QrCodePage implements OnInit {
         const joinRequest = approvedRequestSnapshot.docs[0].data() as any;
         const familyName = joinRequest['familyName'];
         if (familyName) {
-          console.log('🏠 Found family through approved join request:', familyName);
+          console.log('Found family through approved join request:', familyName);
           return familyName;
         }
       }
 
-      console.log('❌ No family found for current user');
+      console.log('No family found for current user');
       return null;
 
     } catch (error) {
-      console.error('❌ Error finding family for current user:', error);
+      console.error('Error finding family for current user:', error);
       return null;
     }
   }
 
   private async buildComprehensiveFamilyData(familyName: string): Promise<any> {
     try {
-      console.log('🔍 Building comprehensive family data for:', familyName);
+      console.log('Building comprehensive family data for:', familyName);
 
       const familyMembers = await this.familyService.getFamilyMembers(familyName);
-      console.log('👨‍👩‍👧‍👦 Family members:', familyMembers);
+      console.log('Family members:', familyMembers);
 
       const children = await this.familyService.getFamilyChildren(familyName);
-      console.log('👶 Children:', children);
+      console.log('Children:', children);
 
       const sessionId = this.generateSessionId();
       const timestamp = new Date().toISOString();
@@ -221,11 +221,11 @@ export class QrCodePage implements OnInit {
         }
       };
 
-      console.log('📄 Comprehensive family data (optimized for QR):', familyData);
+      console.log('Comprehensive family data (optimized for QR):', familyData);
       return familyData;
 
     } catch (error) {
-      console.error('❌ Error building comprehensive family data:', error);
+      console.error('Error building comprehensive family data:', error);
       throw error;
     }
   }
@@ -244,7 +244,7 @@ export class QrCodePage implements OnInit {
       const familyName = await this.findFamilyNameForCurrentUser();
       if (!familyName) throw new Error('No family found for this user');
 
-      console.log('🔍 Generating QR for family:', familyName);
+      console.log('Generating QR for family:', familyName);
 
       
       // `fam` duplicates `family` so short links / scanners that clip the query still often retain a working param
@@ -254,7 +254,7 @@ export class QrCodePage implements OnInit {
       const uidEnc = encodeURIComponent(this.currentUser.uid || '');
       const hostedUrl = `${this.hostedBaseUrl}?family=${enc}&fam=${enc}&authorizer=${auth}&uid=${uidEnc}`;
 
-      console.log('🔗 QR URL:', hostedUrl);
+      console.log('QR URL:', hostedUrl);
 
       const familyData = {
         familyName,
@@ -266,7 +266,7 @@ export class QrCodePage implements OnInit {
       const qrUrl = await this.generateQRCodeImage(hostedUrl);
       if (!qrUrl) throw new Error('Failed to generate QR code');
 
-      console.log('✅ QR Image URL:', qrUrl);
+      console.log('QR Image URL:', qrUrl);
 
       this.qrCodeImageUrl = qrUrl;
       this.qrPattern = [];
@@ -277,7 +277,7 @@ export class QrCodePage implements OnInit {
       this.cacheQRCode(qrUrl, imageDataUrl, hostedUrl, familyData);
       await this.showToast('QR Code generated successfully!', 'success');
     } catch (err) {
-      console.error('❌ QR Generation Error:', err);
+      console.error('QR Generation Error:', err);
       // If online generation fails, try cached QR first; otherwise fallback pattern.
       const cached = this.loadCachedQRCode();
       if (this.isQRCodeValid(cached) && cached?.imageDataUrl) {
