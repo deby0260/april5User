@@ -1,8 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, addDoc } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
-import { Auth } from '@angular/fire/auth';
-import { onAuthStateChanged, User } from 'firebase/auth';
 import { environment } from '../../environments/environment';
 
 const SETTINGS_KEY = 'fetchsafe-settings';
@@ -22,8 +20,7 @@ export interface EmailableNotificationItem {
 export class NotificationEmailForwardService {
   constructor(
     private firestore: Firestore,
-    private functions: Functions,
-    private auth: Auth
+    private functions: Functions
   ) {}
 
   isEmailForwardingEnabled(): boolean {
@@ -61,16 +58,6 @@ export class NotificationEmailForwardService {
 
     const batch = pending.slice(0, maxPerSync);
 
-    if (environment.notificationEmailMode === 'vercel_http') {
-      const base = this.normalizeVercelBaseUrl(environment.notificationEmailVercelBaseUrl);
-      if (!base) {
-        console.warn('notificationEmailVercelBaseUrl is not set; skipping email forward');
-        return;
-      }
-      await this.forwardViaVercel(base, batch, sentIds);
-      return;
-    }
-
     if (environment.notificationEmailMode === 'resend_callable') {
       await this.forwardViaResendCallable(batch, sentIds);
       return;
@@ -98,70 +85,6 @@ export class NotificationEmailForwardService {
     }
 
     this.persistSentIds(sentIds);
-  }
-
-  /** Accepts `https://host` or `host` (https prepended). No trailing slash. */
-  private normalizeVercelBaseUrl(raw: string | undefined): string {
-    const t = (raw ?? '').trim().replace(/\/$/, '');
-    if (!t) return '';
-    if (/^https?:\/\//i.test(t)) return t;
-    return `https://${t}`;
-  }
-
-  private async forwardViaVercel(
-    baseUrl: string,
-    batch: EmailableNotificationItem[],
-    sentIds: Set<string>
-  ): Promise<void> {
-    try {
-      const user = await this.getFirebaseAuthUser();
-      if (!user) {
-        console.warn('No Firebase session; cannot call Vercel email API');
-        return;
-      }
-      const token = await user.getIdToken();
-      const url = `${baseUrl.replace(/\/$/, '')}/api/send-notification-digest`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          items: batch.map((n) => ({
-            id: n.id,
-            title: n.title,
-            displayMessage: n.displayMessage,
-            time: n.time,
-          })),
-        }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        console.warn('Vercel notification email failed:', response.status, text);
-        return;
-      }
-      const data = (await response.json()) as { emailedIds?: string[] };
-      const emailedIds = Array.isArray(data?.emailedIds) ? data.emailedIds : [];
-      for (const id of emailedIds) {
-        if (id) {
-          sentIds.add(id);
-        }
-      }
-      this.persistSentIds(sentIds);
-    } catch (e) {
-      console.warn('Vercel notification email request failed:', e);
-    }
-  }
-
-  /** First auth emission after persistence restore (authStateReady not in this firebase/auth build). */
-  private getFirebaseAuthUser(): Promise<User | null> {
-    return new Promise((resolve) => {
-      const unsub = onAuthStateChanged(this.auth, (u) => {
-        unsub();
-        resolve(u);
-      });
-    });
   }
 
   private async forwardViaResendCallable(

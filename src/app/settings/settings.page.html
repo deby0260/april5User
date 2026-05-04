@@ -26,6 +26,9 @@
             (ionChange)="saveSettings()">
           </ion-toggle>
         </div>
+        <p class="setting-hint">
+          On iPhone or Android, allow notifications when prompted so pickup and schedule alerts can appear on this device.
+        </p>
 
         <div class="setting-item">
           <span class="setting-label">Enable SMS notifications</span>
@@ -44,6 +47,9 @@
             (ionChange)="saveSettings()">
           </ion-toggle>
         </div>
+        <p class="setting-hint" *ngIf="settings.emailNotifications && currentUser as cu">
+          Copies go to {{ cu.email }} when you open Notifications (requires Firebase Trigger Email + rules).
+        </p>
       </div>
     </div>
 

@@ -1,10 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
-import { Firestore, collection, query, where, getDocs, doc, updateDoc, deleteDoc } from '@angular/fire/firestore';
+import { Firestore, collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { FamilyService, FamilyMember } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
+import { NotificationService } from '../services/notification.service';
 import { LoadingController, ToastController, AlertController } from '@ionic/angular';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
 import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
@@ -49,6 +50,7 @@ export class ViewSchedulePage implements OnInit {
   /** HH:mm for ion-input type="time" */
   editTime = '';
   savingInlineEdit = false;
+  private autoCompleteInterval: any;
 
   constructor(
     private location: Location,
@@ -57,6 +59,7 @@ export class ViewSchedulePage implements OnInit {
     private authService: AuthService,
     private familyService: FamilyService,
     private panicService: PanicService,
+    private notificationService: NotificationService,
     private loadingController: LoadingController,
     private toastController: ToastController,
     private alertController: AlertController,
@@ -66,6 +69,7 @@ export class ViewSchedulePage implements OnInit {
 
   async ngOnInit() {
     this.userRole = await this.roleAccessService.getUserRole();
+    this.startAutomaticScheduleCompletion();
   }
 
   /** Reload from Firestore whenever the page is shown (tab/back from scheduling), not only on first create. */
@@ -73,6 +77,62 @@ export class ViewSchedulePage implements OnInit {
     await this.loadScheduleData();
   }
 
+  startAutomaticScheduleCompletion() {
+    this.autoCompleteInterval = setInterval(async () => {
+      await this.checkAndCompleteOverdueSchedules();
+    }, 60000); 
+
+   
+    setTimeout(async () => {
+      await this.checkAndCompleteOverdueSchedules();
+    }, 5000); 
+  }
+
+  ngOnDestroy() {
+    
+    if (this.autoCompleteInterval) {
+      clearInterval(this.autoCompleteInterval);
+    }
+  }
+
+  async checkAndCompleteOverdueSchedules() {
+    try {
+      console.log('Checking for overdue schedules...');
+      await this.loadScheduleData({ silent: true });
+      const now = new Date();
+      const currentTime = now.getHours() * 60 + now.getMinutes(); 
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+        now.getDate()
+      ).padStart(2, '0')}`;
+      const schedulesToComplete = [];
+
+      for (const schedule of this.schedules) {
+        
+        const scheduleDate = this.toLocalYmd(schedule.date);
+
+        if (scheduleDate === today) {
+          
+          const scheduleTimeMinutes = this.parseScheduleTimeToMinutesSafe(schedule.time);
+
+          
+          if (currentTime > scheduleTimeMinutes) {
+            console.log(`Schedule overdue: ${schedule.childName} at ${schedule.time} (${scheduleTimeMinutes} minutes) - Current: ${currentTime} minutes`);
+            schedulesToComplete.push(schedule);
+          }
+        }
+      }
+
+      
+      for (const schedule of schedulesToComplete) {
+        await this.automaticallyCompleteSchedule(schedule);
+      }
+
+    } catch (error) {
+      console.error('Error checking overdue schedules:', error);
+    }
+  }
+
+  
   parseTimeToMinutes(timeString: string): number {
     try {
       const raw = timeString.trim().split(/\s+/);
@@ -214,6 +274,43 @@ export class ViewSchedulePage implements OnInit {
     return [s.id, ...(s.duplicateDocIds || [])];
   }
 
+  async automaticallyCompleteSchedule(schedule: ScheduleItem) {
+    try {
+      console.log('Automatically completing schedule:', schedule.childName);
+
+  
+      
+      const completedBy = schedule.fetcherName || 'Unknown Fetcher';
+
+      
+      const docIds = this.allScheduleDocIds(schedule);
+      for (const docId of docIds) {
+        const scheduleDoc = doc(this.firestore, 'Schedules', docId);
+        await updateDoc(scheduleDoc, {
+          'Status': 'completed',
+          'Completed At': serverTimestamp(),
+          'Completed By': completedBy
+        });
+      }
+
+      
+      await this.createAutomaticPickupNotificationLog(schedule, completedBy);
+
+      
+      await this.sendAutomaticCapacitorNotification(schedule);
+
+      
+      const scheduleIndex = this.schedules.findIndex(s => s.id === schedule.id);
+      if (scheduleIndex !== -1) {
+        this.schedules.splice(scheduleIndex, 1);
+        console.log('Automatically removed completed schedule from view');
+      }
+
+    } catch (error) {
+      console.error('Error automatically completing schedule:', error);
+    }
+  }
+
   async loadScheduleData(opts?: { silent?: boolean }) {
     const silent = opts?.silent === true;
     if (!silent) {
@@ -331,6 +428,55 @@ export class ViewSchedulePage implements OnInit {
     const displayHour = hour % 12 || 12;
 
     return `${displayHour}:${minutes} ${ampm}`;
+  }
+
+  async createAutomaticPickupNotificationLog(schedule: ScheduleItem, completedBy: string) {
+    try {
+      console.log('Creating automatic pickup notification log for:', schedule.childName);
+
+      const pickupNotificationData = {
+        type: 'pickup_completion',
+        title: `${schedule.childName} picked up`,
+        message: `${schedule.childName} was automatically marked as picked up at scheduled time`,
+        childName: schedule.childName,
+        childGrade: schedule.childGrade,
+        fetcherName: schedule.fetcherName,
+        completedBy: completedBy,
+        familyName: schedule.familyName,
+        scheduleId: schedule.id,
+        scheduleDate: schedule.date,
+        scheduleTime: schedule.time,
+        scheduleDays: schedule.days,
+        isRead: false,
+        createdAt: serverTimestamp()
+      };
+
+      console.log('Automatic notification data to save:', pickupNotificationData);
+
+      const notificationsCollection = collection(this.firestore, 'Notifications');
+      const docRef = await addDoc(notificationsCollection, pickupNotificationData);
+
+      console.log('Automatic pickup notification logged successfully with ID:', docRef.id);
+    } catch (error) {
+      console.error('Error creating automatic pickup notification log:', error);
+    }
+  }
+
+  async sendAutomaticCapacitorNotification(schedule: ScheduleItem) {
+    try {
+      const title = 'Schedule Auto-Completed';
+      const message = `${schedule.childName} pickup time has passed - automatically marked as completed`;
+
+      await this.notificationService.sendScheduleNotification(
+        title,
+        message,
+        schedule.familyName
+      );
+
+      console.log('Automatic Capacitor notification sent');
+    } catch (error) {
+      console.error('Error sending automatic Capacitor notification:', error);
+    }
   }
 
   async showToast(message: string) {

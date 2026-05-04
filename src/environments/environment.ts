@@ -26,12 +26,9 @@ export const environment = {
   maxNotificationEmailsPerSync: 30,
   /**
    * firestore_queue: client writes to `notificationEmailCollection` (Trigger Email extension).
-   * resend_callable: Firebase HTTPS callable (requires Blaze).
-   * vercel_http: POST to `{notificationEmailVercelBaseUrl}/api/send-notification-digest` (Vercel server in `vercel-server/`).
+   * resend_callable: HTTPS callable `sendNotificationDigestEmails` sends via Resend (API key on server only).
    */
-  notificationEmailMode: 'vercel_http' as 'firestore_queue' | 'resend_callable' | 'vercel_http',
-  /** e.g. https://your-app.vercel.app — no trailing slash. Required when notificationEmailMode is vercel_http. */
-  notificationEmailVercelBaseUrl: 'https://fetch-user-tan.vercel.app',
+  notificationEmailMode: 'resend_callable' as 'firestore_queue' | 'resend_callable',
   /** Region where `sendNotificationDigestEmails` is deployed (must match Firebase). */
   firebaseFunctionsRegion: 'us-central1',
 };

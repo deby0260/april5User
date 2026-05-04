@@ -16,8 +16,6 @@ export const environment = {
   },
   notificationEmailCollection: 'mail',
   maxNotificationEmailsPerSync: 30,
-  notificationEmailMode: 'vercel_http' as const,
-  /** Same as dev: full URL, e.g. https://your-app.vercel.app (Root Directory = vercel-server). */
-  notificationEmailVercelBaseUrl: 'https://fetch-user-tan.vercel.app',
+  notificationEmailMode: 'resend_callable' as const,
   firebaseFunctionsRegion: 'us-central1',
 };
