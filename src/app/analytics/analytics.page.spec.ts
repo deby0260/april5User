@@ -2,7 +2,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AnalyticsPage } from './analytics.page';
 import { Location } from '@angular/common';
 import { AnalyticsPunctualityService } from '../services/analytics-punctuality.service';
+import { AnalyticsSafetyService } from '../services/analytics-safety.service';
 import { FamilyService } from '../services/family.service';
+import { RoleAccessService } from '../services/role-access.service';
 
 describe('AnalyticsPage', () => {
   let component: AnalyticsPage;
@@ -33,6 +35,23 @@ describe('AnalyticsPage', () => {
         {
           provide: FamilyService,
           useValue: { getUserFamily: async () => null },
+        },
+        {
+          provide: AnalyticsSafetyService,
+          useValue: {
+            loadSafetyAnalytics: async () => ({
+              scanLogs: [],
+              panicTotal30d: 0,
+              panicDaily30d: [],
+            }),
+          },
+        },
+        {
+          provide: RoleAccessService,
+          useValue: {
+            getUserRole: async () => ({ canAccessAnalytics: true, role: 'parent' }),
+            getAccessDeniedMessage: () => 'Access denied',
+          },
         },
       ],
     });
