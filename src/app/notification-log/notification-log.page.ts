@@ -52,9 +52,15 @@ interface PickupNotification {
   standalone: false
 })
 export class NotificationLogPage implements OnInit, OnDestroy {
-  todayNotifications: PickupNotification[] = [];
-  yesterdayNotifications: PickupNotification[] = [];
-  olderNotifications: PickupNotification[] = [];
+  /** All merged notifications (sorted newest-first). */
+  private allNotifications: PickupNotification[] = [];
+
+  /** Date-grouped notifications for the current page (10 items/page). */
+  groupedNotifications: Array<{ dateLabel: string; items: PickupNotification[] }> = [];
+
+  notificationPage = 1;
+  readonly notificationPageSize = 10;
+
   isLoading: boolean = false;
 
   detailModalOpen = false;
@@ -315,7 +321,9 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         return dateB - dateA;
       });
 
-      this.categorizeNotifications(merged);
+      this.allNotifications = merged;
+      this.notificationPage = 1;
+      this.rebuildGroupedNotifications();
 
     } catch (error) {
       console.error('Error loading pickup notifications:', error);
@@ -565,7 +573,20 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         const arrivalTimeLabel = this.formatTime(scannedAt);
 
         if (action === 'Entered') {
-          title = `${who} has arrived`;
+          // Show intended pickup at arrival time when we can match schedules.
+          const children = await this.resolveScheduledChildNamesForExit(
+            familyName,
+            authorizerUid,
+            scannedAt
+          );
+          childName = children.join(', ');
+          if (children.length === 1) {
+            title = `Pickup ${children[0]}`;
+          } else if (children.length > 1) {
+            title = `Pickup ${children.join(', ')}`;
+          } else {
+            title = `${who} has arrived`;
+          }
           subtitle = `Arrived at ${arrivalTimeLabel} at the school`;
         } else {
           const children = await this.resolveScheduledChildNamesForExit(
@@ -604,7 +625,9 @@ export class NotificationLogPage implements OnInit, OnDestroy {
           scanEventDocId: docId,
           message:
             action === 'Entered'
-              ? `${who} arrived at the school at ${arrivalTimeLabel}.`
+              ? childName && childName !== '—'
+                ? `${who} arrived at the school at ${arrivalTimeLabel} to pick up ${childName}.`
+                : `${who} arrived at the school at ${arrivalTimeLabel}.`
               : childName && childName !== '—'
                 ? `${who} picked up ${childName} at the school.`
                 : `${who} exited the school.`,
@@ -618,32 +641,63 @@ export class NotificationLogPage implements OnInit, OnDestroy {
     }
   }
 
-  categorizeNotifications(notifications: PickupNotification[]) {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+  private rebuildGroupedNotifications(): void {
+    const start = (this.notificationPage - 1) * this.notificationPageSize;
+    const end = start + this.notificationPageSize;
+    const pageItems = this.allNotifications.slice(start, end);
 
-    this.todayNotifications = [];
-    this.yesterdayNotifications = [];
-    this.olderNotifications = [];
+    const groups = new Map<string, PickupNotification[]>();
+    for (const n of pageItems) {
+      const d = n.createdAt?.toDate ? n.createdAt.toDate() : new Date(n.createdAt);
+      const label = Number.isNaN(d.getTime())
+        ? 'Unknown date'
+        : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(n);
+    }
 
-    notifications.forEach(notification => {
-      const notificationDate = notification.createdAt?.toDate ?
-        notification.createdAt.toDate() : new Date(notification.createdAt);
-
-      if (this.isSameDay(notificationDate, today)) {
-        this.todayNotifications.push(notification);
-      } else if (this.isSameDay(notificationDate, yesterday)) {
-        this.yesterdayNotifications.push(notification);
-      } else {
-        notification.date = notificationDate.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        });
-        this.olderNotifications.push(notification);
+    // Preserve page order (newest-first) by iterating in encounter order.
+    const out: Array<{ dateLabel: string; items: PickupNotification[] }> = [];
+    for (const n of pageItems) {
+      const d = n.createdAt?.toDate ? n.createdAt.toDate() : new Date(n.createdAt);
+      const label = Number.isNaN(d.getTime())
+        ? 'Unknown date'
+        : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      if (!out.some((g) => g.dateLabel === label)) {
+        out.push({ dateLabel: label, items: groups.get(label) ?? [] });
       }
-    });
+    }
+    this.groupedNotifications = out;
+  }
+
+  totalPages(): number {
+    const n = this.allNotifications.length;
+    return n > 0 ? Math.ceil(n / this.notificationPageSize) : 1;
+  }
+
+  pageLabel(): string {
+    if (!this.allNotifications.length) return '';
+    return `Page ${this.notificationPage} of ${this.totalPages()}`;
+  }
+
+  canPrev(): boolean {
+    return this.notificationPage > 1;
+  }
+
+  canNext(): boolean {
+    return this.notificationPage < this.totalPages();
+  }
+
+  prevPage(): void {
+    if (!this.canPrev()) return;
+    this.notificationPage -= 1;
+    this.rebuildGroupedNotifications();
+  }
+
+  nextPage(): void {
+    if (!this.canNext()) return;
+    this.notificationPage += 1;
+    this.rebuildGroupedNotifications();
   }
 
   isSameDay(date1: Date, date2: Date): boolean {
@@ -712,9 +766,12 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         }
       }
 
-      this.todayNotifications = this.todayNotifications.filter((n) => n.id !== notificationId);
-      this.yesterdayNotifications = this.yesterdayNotifications.filter((n) => n.id !== notificationId);
-      this.olderNotifications = this.olderNotifications.filter((n) => n.id !== notificationId);
+      this.allNotifications = this.allNotifications.filter((n) => n.id !== notificationId);
+      // Keep page in range.
+      if (this.notificationPage > this.totalPages()) {
+        this.notificationPage = this.totalPages();
+      }
+      this.rebuildGroupedNotifications();
 
       await this.showToast('Notification dismissed');
     } catch (error) {
