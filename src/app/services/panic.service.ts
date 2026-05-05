@@ -57,6 +57,37 @@ export class PanicService {
       return;
     }
 
+    // Lock: do not allow triggering panic while an unresolved panic alert exists for the family.
+    try {
+      const family = await this.familyService.getUserFamily();
+      if (family?.name) {
+        const locked = await this.hasUnresolvedPanicAlert(family.name);
+        if (locked) {
+          const lockedAlert = await this.alertController.create({
+            header: 'Panic already active',
+            message:
+              'A panic alert is already active for your family and has not been resolved yet. Please wait until an admin resolves it.',
+            buttons: [{ text: 'OK', role: 'cancel', handler: () => onCancel?.() }],
+            cssClass: 'panic-alert-restricted',
+          });
+          await lockedAlert.present();
+          return;
+        }
+      }
+    } catch (e) {
+      // If we cannot verify lock state (offline/rules), fail-safe: block re-triggering.
+      console.warn('Panic lock check failed; blocking trigger for safety:', e);
+      const lockedAlert = await this.alertController.create({
+        header: 'Cannot send panic right now',
+        message:
+          'We could not verify if a panic alert is already active. Please check your connection and try again.',
+        buttons: [{ text: 'OK', role: 'cancel', handler: () => onCancel?.() }],
+        cssClass: 'panic-alert-restricted',
+      });
+      await lockedAlert.present();
+      return;
+    }
+
     const alert = await this.alertController.create({
       header: 'EMERGENCY PANIC ALERT',
       message: 'This will immediately notify all family members and administrators about your emergency.',
@@ -85,6 +116,73 @@ export class PanicService {
     });
 
     await alert.present();
+  }
+
+  private async hasUnresolvedPanicAlert(familyName: string): Promise<boolean> {
+    const fam = String(familyName || '').trim();
+    if (!fam) return false;
+    const alertsRef = collection(this.firestore, 'Panic Alert');
+    const snap = await getDocs(query(alertsRef, where('familyName', '==', fam)));
+    if (snap.empty) return false;
+
+    const rows = snap.docs.map((d) => {
+      const data = d.data() as any;
+      const unresolved = !this.isResolvedPanicDoc(data);
+      let t = this.timestampMs(data?.createdAt ?? data?.alertTime);
+      if (unresolved && t <= 0) {
+        t = Date.now();
+      }
+      return { unresolved, t };
+    });
+    rows.sort((a, b) => b.t - a.t);
+    const latest = rows[0];
+    return Boolean(latest?.unresolved);
+  }
+
+  private isResolvedPanicDoc(data: any): boolean {
+    const resolvedVal =
+      data?.resolved ??
+      data?.Resolved ??
+      data?.isResolved ??
+      data?.is_resolved ??
+      data?.resolvedAt ??
+      data?.resolved_at;
+
+    const statusRaw = data?.status ?? data?.Status ?? data?.STATE ?? data?.state;
+    const statusVal = String(statusRaw || '').trim().toLowerCase();
+
+    const resolvedStr = String(resolvedVal ?? '').trim().toLowerCase();
+    const resolvedTruthy =
+      resolvedVal === true ||
+      resolvedVal === 1 ||
+      resolvedVal === '1' ||
+      resolvedVal === 'true' ||
+      resolvedVal === 'TRUE' ||
+      resolvedStr === 'resolved' ||
+      resolvedStr === 'yes';
+
+    return (
+      resolvedTruthy ||
+      statusVal === 'resolved' ||
+      statusVal === 'closed' ||
+      statusVal === 'done'
+    );
+  }
+
+  private timestampMs(v: any): number {
+    if (v == null) return 0;
+    if (typeof v?.toMillis === 'function') return v.toMillis();
+    if (typeof v?.toDate === 'function') {
+      const d = v.toDate();
+      return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+    if (typeof v === 'object' && typeof v?.seconds === 'number') return v.seconds * 1000;
+    if (v instanceof Date) {
+      const t = v.getTime();
+      return Number.isNaN(t) ? 0 : t;
+    }
+    const d = new Date(v as string | number);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
   }
 
   private async sendPanicAlert(): Promise<void> {
