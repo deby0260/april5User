@@ -1,6 +1,39 @@
 <ion-content [fullscreen]="true" class="analytics-page" [scrollY]="true">
   <div class="page-container">
-    <div class="stats-grid">
+    <div class="scope-banner" *ngIf="!isLoading">
+      {{ scopeBannerText }}
+    </div>
+
+    <div
+      class="scope-row input-group"
+      *ngIf="!isLoading && fetcherOptions.length >= 1">
+      <label class="input-label">1. Whose analytics?</label>
+      <ion-select
+        class="family-select scope-select"
+        placeholder="Select parent or companion"
+        [value]="scopeSelectModel"
+        (ionChange)="onFetcherScopeChange($event)"
+        interface="popover">
+        <ion-select-option [value]="allFetchersValue">All companions / fetchers</ion-select-option>
+        <ion-select-option *ngFor="let f of fetcherOptions" [value]="f.uid">{{ f.label }}</ion-select-option>
+      </ion-select>
+      <ion-note color="medium" class="step-hint">
+        Choose one person or all fetchers; stats use the last 30 days of schedules.
+      </ion-note>
+    </div>
+
+    <div class="analytics-caption">
+      Based on <strong>Schedules</strong> and <strong>ScanEvents</strong> (last 30 days; on-time = completed within 15 minutes after scheduled time).
+    </div>
+
+    <div *ngIf="loadError" class="error-banner">{{ loadError }}</div>
+
+    <div *ngIf="isLoading" class="loading-row">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <span>Loading analytics…</span>
+    </div>
+
+    <div class="stats-grid" *ngIf="!isLoading">
       <div class="stat-card">
         <div class="stat-number">{{ analytics.totalPickUps }}</div>
         <div class="stat-label">Total Pick Ups</div>
@@ -22,9 +55,8 @@
       </div>
     </div>
 
-   
-    <div class="chart-section">
-      <h3>Pick Ups</h3>
+    <div class="chart-section" *ngIf="!isLoading">
+      <h3>Pick Ups (last 7 days)</h3>
       <div class="chart-container">
         <div class="chart-placeholder">
           <div class="chart-legend">
@@ -41,51 +73,34 @@
               <span>Missed</span>
             </div>
           </div>
-          <div class="chart-bars">
-            <div class="chart-day">
+          <div class="chart-bars" *ngIf="weekBars.length">
+            <div class="chart-day" *ngFor="let d of weekBars">
               <div class="bar-container">
-                <div class="bar blue" style="height: 60%"></div>
-                <div class="bar red" style="height: 20%"></div>
+                <div
+                  class="bar blue"
+                  [style.height.%]="barHeightPct(d.onTime, d.maxStack)">
+                </div>
+                <div
+                  class="bar red"
+                  [style.height.%]="barHeightPct(d.late, d.maxStack)">
+                </div>
+                <div
+                  class="bar gray"
+                  [style.height.%]="barHeightPct(d.missed, d.maxStack)">
+                </div>
               </div>
-              <span class="day-label">Mon</span>
-            </div>
-            <div class="chart-day">
-              <div class="bar-container">
-                <div class="bar blue" style="height: 80%"></div>
-                <div class="bar red" style="height: 10%"></div>
-              </div>
-              <span class="day-label">Tue</span>
-            </div>
-            <div class="chart-day">
-              <div class="bar-container">
-                <div class="bar blue" style="height: 70%"></div>
-                <div class="bar red" style="height: 15%"></div>
-              </div>
-              <span class="day-label">Wed</span>
-            </div>
-            <div class="chart-day">
-              <div class="bar-container">
-                <div class="bar blue" style="height: 90%"></div>
-                <div class="bar red" style="height: 5%"></div>
-              </div>
-              <span class="day-label">Thu</span>
-            </div>
-            <div class="chart-day">
-              <div class="bar-container">
-                <div class="bar blue" style="height: 85%"></div>
-                <div class="bar red" style="height: 10%"></div>
-              </div>
-              <span class="day-label">Fri</span>
+              <span class="day-label">{{ d.label }}</span>
             </div>
           </div>
+          <p *ngIf="!weekBars.length" class="empty-hint">No schedule data in this window yet.</p>
         </div>
       </div>
     </div>
 
-    <div class="reliability-section">
+    <div class="reliability-section" *ngIf="!isLoading">
       <div class="reliability-card">
         <div class="reliability-header">
-          <span class="reliability-label">Fetcher Reliability Score</span>
+          <span class="reliability-label">{{ reliabilityHeading }}</span>
           <div class="reliability-score">
             <span class="score-number">{{ analytics.reliabilityScore }}%</span>
             <div class="score-circle">
@@ -105,40 +120,29 @@
             </div>
           </div>
         </div>
+        <p class="reliability-sub">
+          Share of on-time pickups among completed + missed (past-due) pickups in the last 30 days{{ selectedFetcherUid === null ? '' : ' for this person' }}.
+        </p>
       </div>
     </div>
 
-    <div class="trend-section">
-      <h3>Incident Trend</h3>
+    <div class="trend-section" *ngIf="!isLoading">
+      <h3>Weekly on-time rate</h3>
       <div class="trend-chart">
-        <div class="trend-line">
-
-          <svg width="100%" height="120" viewBox="0 0 300 120">
+        <div class="trend-line" *ngIf="trendPolylinePoints">
+          <svg width="100%" height="120" viewBox="0 0 300 120" preserveAspectRatio="none">
             <polyline
               fill="none"
               stroke="#20b2aa"
               stroke-width="2"
-              points="20,80 60,60 100,70 140,50 180,40 220,45 260,35 300,30">
+              [attr.points]="trendPolylinePoints">
             </polyline>
-            <circle cx="20" cy="80" r="3" fill="#20b2aa"></circle>
-            <circle cx="60" cy="60" r="3" fill="#20b2aa"></circle>
-            <circle cx="100" cy="70" r="3" fill="#20b2aa"></circle>
-            <circle cx="140" cy="50" r="3" fill="#20b2aa"></circle>
-            <circle cx="180" cy="40" r="3" fill="#20b2aa"></circle>
-            <circle cx="220" cy="45" r="3" fill="#20b2aa"></circle>
-            <circle cx="260" cy="35" r="3" fill="#20b2aa"></circle>
-            <circle cx="300" cy="30" r="3" fill="#20b2aa"></circle>
           </svg>
         </div>
-        <div class="trend-labels">
-          <span>Jan</span>
-          <span>Feb</span>
-          <span>Mar</span>
-          <span>Apr</span>
-          <span>May</span>
-          <span>Jun</span>
-          <span>Jul</span>
+        <div class="trend-labels" *ngIf="trend.length">
+          <span *ngFor="let t of trend">{{ t.label }}</span>
         </div>
+        <p *ngIf="!trend.length" class="empty-hint">Not enough history for a trend yet.</p>
       </div>
     </div>
   </div>

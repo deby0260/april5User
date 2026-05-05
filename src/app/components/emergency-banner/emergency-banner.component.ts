@@ -33,6 +33,9 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       if (state) {
         this.activeEmergency = state;
         this.setCachedEmergency(state);
+      } else {
+        this.activeEmergency = null;
+        this.clearAllEmergencyCaches();
       }
     });
 
@@ -99,52 +102,75 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Remove all persisted emergency banner snapshots (e.g. after logout or resolve). */
+  private clearAllEmergencyCaches(): void {
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('activeEmergency:')) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  private dismissBannerAndCaches(): void {
+    this.activeEmergency = null;
+    this.panicService.setActiveEmergencyBanner(null);
+    this.clearAllEmergencyCaches();
+  }
+
   async refresh(): Promise<void> {
     const currentUser = this.authService.getCurrentUser();
     if (!currentUser) {
-      // Keep showing cached emergency until we can confirm resolution.
+      this.dismissBannerAndCaches();
       return;
     }
 
     const family = await this.familyService.getUserFamily();
     if (!family?.name) {
-      // Keep showing cached emergency until we can confirm resolution.
+      this.dismissBannerAndCaches();
       return;
     }
 
-    const alertsRef = collection(this.firestore, 'Panic Alert');
-    const q = query(
-      alertsRef,
-      where('familyName', '==', family.name),
-      where('resolved', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
+    try {
+      const alertsRef = collection(this.firestore, 'Panic Alert');
+      const q = query(
+        alertsRef,
+        where('familyName', '==', family.name),
+        where('resolved', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
 
-    const snap = await getDocs(q);
-    if (snap.empty) {
-      // Only clear once we've successfully checked the family and confirmed no unresolved alerts.
-      this.activeEmergency = null;
-      this.panicService.setActiveEmergencyBanner(null);
-      this.clearCachedEmergency(family.name);
-      return;
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        this.activeEmergency = null;
+        this.panicService.setActiveEmergencyBanner(null);
+        this.clearAllEmergencyCaches();
+        return;
+      }
+
+      const data = snap.docs[0].data() as any;
+      const triggeredByName =
+        data?.alertTriggeredBy ||
+        data?.['Parents Name'] ||
+        data?.senderName ||
+        'A family member';
+
+      const createdAt = data?.createdAt ?? data?.alertTime;
+      const createdAtMs =
+        createdAt?.toDate?.()?.getTime?.() ??
+        (createdAt ? new Date(createdAt).getTime() : Date.now());
+
+      this.activeEmergency = { triggeredByName, createdAtMs, familyName: family.name };
+      this.panicService.setActiveEmergencyBanner(this.activeEmergency);
+      this.setCachedEmergency(this.activeEmergency);
+    } catch (e) {
+      console.warn('EmergencyBanner: refresh query failed', e);
+      this.dismissBannerAndCaches();
     }
-
-    const data = snap.docs[0].data() as any;
-    const triggeredByName =
-      data?.alertTriggeredBy ||
-      data?.['Parents Name'] ||
-      data?.senderName ||
-      'A family member';
-
-    const createdAt = data?.createdAt ?? data?.alertTime;
-    const createdAtMs =
-      createdAt?.toDate?.()?.getTime?.() ??
-      (createdAt ? new Date(createdAt).getTime() : Date.now());
-
-    this.activeEmergency = { triggeredByName, createdAtMs, familyName: family.name };
-    this.panicService.setActiveEmergencyBanner(this.activeEmergency);
-    this.setCachedEmergency(this.activeEmergency);
   }
 
   get timeText(): string {
