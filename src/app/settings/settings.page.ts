@@ -64,6 +64,7 @@ export class SettingsPage implements OnInit {
   async saveSettings() {
     localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
     void this.syncEmailNotificationPreferenceToProfile();
+    void this.syncSmsNotificationPreferenceToProfile();
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
     if (!this.settings.appNotifications) {
       await this.showToast('App notifications disabled on this device');
@@ -90,6 +91,23 @@ export class SettingsPage implements OnInit {
       );
     } catch (e) {
       console.warn('Could not sync email notification preference to profile', e);
+    }
+  }
+
+  /** Aligns with Cloud Function `sendSmsOnNotificationCreate` (skips when false in Registerd). */
+  private async syncSmsNotificationPreferenceToProfile() {
+    const u = this.currentUser;
+    if (!u?.uid) {
+      return;
+    }
+    try {
+      await setDoc(
+        doc(this.firestore, 'Registerd', u.uid),
+        { smsNotifications: this.settings.smsNotifications },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Could not sync SMS notification preference to profile', e);
     }
   }
 

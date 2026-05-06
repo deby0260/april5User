@@ -1,0 +1,16 @@
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--ion-background-color, #ffffff);
+}
+
+.app-splash-logo {
+  width: min(320px, 80vw);
+  height: auto;
+}
+

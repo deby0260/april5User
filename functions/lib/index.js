@@ -26,27 +26,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEmailOnScanEventCreate = exports.sendEmailOnNotificationCreate = exports.sendNotificationDigestEmails = exports.sendSmsOnNotificationCreate = void 0;
+exports.sendEmailOnScanEventCreate = exports.sendEmailOnNotificationCreate = exports.sendNotificationDigestEmails = exports.sendSmsOnAnnouncementCreate = exports.sendSmsOnNotificationCreate = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
-const twilio_1 = __importDefault(require("twilio"));
 admin.initializeApp();
 const SMS_TYPES = new Set([
     "schedule_assignment",
     "pickup_completion",
     "schedule_completion",
 ]);
-function getTwilioConfig() {
-    const twilioCfg = functions.config().twilio;
-    const accountSid = twilioCfg?.account_sid?.trim();
-    const authToken = twilioCfg?.auth_token?.trim();
-    const fromNumber = twilioCfg?.from_number?.trim();
-    const defaultCc = (twilioCfg?.default_cc || "63").trim();
-    if (!accountSid || !authToken || !fromNumber) {
-        functions.logger.warn("Twilio not configured. Set: firebase functions:config:set twilio.account_sid=... twilio.auth_token=... twilio.from_number=...");
+
+function getIprogConfig() {
+    const cfg = functions.config().iprog || {};
+    const apiToken = cfg?.api_token?.trim?.();
+    if (!apiToken) {
+        functions.logger.warn('IPROG SMS not configured. Set: firebase functions:config:set iprog.api_token="..."');
         return null;
     }
-    return { accountSid, authToken, fromNumber, defaultCc };
+    return { apiToken };
 }
 function getResendRepoDefaults() {
     try {
@@ -82,6 +79,24 @@ async function getContactNumberForUid(uid) {
     const trimmed = raw.trim();
     return trimmed.length ? trimmed : null;
 }
+
+async function isSmsNotificationsEnabledForUid(uid) {
+    if (!uid) {
+        return false;
+    }
+    try {
+        const snap = await admin.firestore().doc(`Registerd/${uid}`).get();
+        // default true if field missing; explicit false disables
+        if (!snap.exists) {
+            return true;
+        }
+        const v = snap.get("smsNotifications");
+        return v !== false;
+    }
+    catch {
+        return true;
+    }
+}
 function toE164(raw, defaultCc) {
     const s = raw.trim();
     if (!s) {
@@ -111,47 +126,73 @@ function toE164(raw, defaultCc) {
     }
     return `+${digitsOnly}`;
 }
-exports.sendSmsOnNotificationCreate = functions.firestore
-    .document("Notifications/{docId}")
-    .onCreate(async (snap) => {
-    const cfg = getTwilioConfig();
-    if (!cfg) {
+
+function toIprogPhone(raw) {
+    // IPROG docs accept "09xxxxxxxxx" or "639xxxxxxxxx". We'll normalize to digits-only.
+    const e164 = toE164(raw, "63");
+    if (!e164) {
         return null;
     }
-    const data = snap.data();
-    const type = data?.type;
-    const recipientId = data?.recipientId;
-    if (!type || !recipientId || !SMS_TYPES.has(type)) {
-        return null;
+    return e164.replace(/^\+/, "");
+}
+
+async function sendOneIprogSms(apiToken, phoneNumberDigits, message) {
+    const url = new URL("https://www.iprogsms.com/api/v1/sms_messages");
+    url.searchParams.set("api_token", apiToken);
+    url.searchParams.set("phone_number", phoneNumberDigits);
+    url.searchParams.set("message", message);
+    const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            api_token: apiToken,
+            phone_number: phoneNumberDigits,
+            message,
+        }),
+    });
+    // Docs show invalid token can return status 500 with body "Invalid Token"
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`IPROG ${res.status}: ${errText}`);
     }
-    const rawPhone = await getContactNumberForUid(recipientId);
-    if (!rawPhone) {
-        functions.logger.warn("No contactNumber in Registerd for recipient", recipientId);
-        return null;
-    }
-    const to = toE164(rawPhone, cfg.defaultCc);
-    if (!to) {
-        functions.logger.warn("Could not normalize phone", rawPhone);
-        return null;
-    }
-    const messageText = (typeof data.message === "string" && data.message.trim()) ||
-        (typeof data.title === "string" && data.title.trim()) ||
-        "You have an update in FetchSafe.";
-    const body = `[FetchSafe] ${messageText}`;
+    // Response is JSON-ish; we don't strictly require it
     try {
-        const client = (0, twilio_1.default)(cfg.accountSid, cfg.authToken);
-        const result = await client.messages.create({
-            body,
-            from: cfg.fromNumber,
-            to,
-        });
-        functions.logger.info("Twilio SMS sent", { to, sid: result.sid, type });
+        return await res.json();
     }
-    catch (err) {
-        functions.logger.error("Twilio SMS failed", err);
+    catch {
+        return await res.text();
     }
-    return null;
-});
+}
+
+async function listSmsRecipientUids() {
+    // We use Registerd because that's where contactNumber + smsNotifications live in this project.
+    const snap = await admin.firestore().collection("Registerd").get();
+    const uids = [];
+    snap.forEach((d) => {
+        if (d.id && typeof d.id === "string") {
+            uids.push(d.id);
+        }
+    });
+    return uids;
+}
+
+async function mapLimit(items, limit, fn) {
+    const results = [];
+    let idx = 0;
+    const workers = Array.from({ length: Math.max(1, limit) }).map(async () => {
+        while (idx < items.length) {
+            const i = idx++;
+            try {
+                results[i] = await fn(items[i], i);
+            }
+            catch (e) {
+                results[i] = e;
+            }
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
 async function sendOneResend(apiKey, from, to, subject, text, html) {
     const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -205,6 +246,84 @@ async function isEmailNotificationsEnabledForUid(uid) {
         return true;
     }
 }
+
+exports.sendSmsOnNotificationCreate = functions.firestore
+    .document("Notifications/{docId}")
+    .onCreate(async (snap) => {
+    const data = snap.data();
+    const type = data?.type;
+    const recipientId = data?.recipientId;
+    if (!type || !recipientId || !SMS_TYPES.has(type)) {
+        return null;
+    }
+    const enabled = await isSmsNotificationsEnabledForUid(recipientId);
+    if (!enabled) {
+        return null;
+    }
+    const iprog = getIprogConfig();
+    if (!iprog) {
+        return null;
+    }
+    const rawPhone = await getContactNumberForUid(recipientId);
+    if (!rawPhone) {
+        functions.logger.warn("SMS skipped: missing contactNumber", { recipientId });
+        return null;
+    }
+    const phone = toIprogPhone(rawPhone);
+    if (!phone) {
+        functions.logger.warn("SMS skipped: invalid contactNumber format", { recipientId });
+        return null;
+    }
+    const messageText = (typeof data.message === "string" && data.message.trim()) ||
+        (typeof data.title === "string" && data.title.trim()) ||
+        "You have an update in FetchSafe.";
+    const body = `[FetchSafe] ${messageText}`;
+    try {
+        const result = await sendOneIprogSms(iprog.apiToken, phone, body);
+        functions.logger.info("IPROG SMS queued", { recipientId, type, phone, result });
+    }
+    catch (err) {
+        functions.logger.error("IPROG SMS failed", err);
+    }
+    return null;
+});
+
+exports.sendSmsOnAnnouncementCreate = functions.firestore
+    .document("Announcements/{docId}")
+    .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    const title = (typeof data.title === "string" && data.title.trim()) ? data.title.trim() : "Announcement";
+    const bodyRaw = (typeof data.body === "string" && data.body.trim()) ? data.body.trim() : "";
+    const msg = bodyRaw ? `[FetchSafe] ${title}: ${bodyRaw}` : `[FetchSafe] ${title}`;
+    const iprog = getIprogConfig();
+    if (!iprog) {
+        return null;
+    }
+    const uids = await listSmsRecipientUids();
+    if (!uids.length) {
+        return null;
+    }
+    functions.logger.info("IPROG announcement SMS broadcast queued", { docId: context.params.docId, recipients: uids.length });
+    // Limit concurrency to avoid hammering the provider/function runtime.
+    await mapLimit(uids, 10, async (uid) => {
+        const enabled = await isSmsNotificationsEnabledForUid(uid);
+        if (!enabled) {
+            return null;
+        }
+        const rawPhone = await getContactNumberForUid(uid);
+        if (!rawPhone) {
+            return null;
+        }
+        const phone = toIprogPhone(rawPhone);
+        if (!phone) {
+            return null;
+        }
+        const result = await sendOneIprogSms(iprog.apiToken, phone, msg);
+        functions.logger.info("IPROG announcement SMS queued", { uid, phone, result });
+        return null;
+    });
+    return null;
+});
 
 /** Email for items that appear in the mobile Notifications page (Firestore `Notifications` docs). */
 exports.sendEmailOnNotificationCreate = functions.firestore

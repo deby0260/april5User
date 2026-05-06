@@ -1,4 +1,14 @@
 <ion-app [class.app-shell-chrome]="showAppChrome">
+  <div
+    class="app-splash"
+    *ngIf="showSplash"
+    role="status"
+    aria-label="Loading FetchSafe">
+    <img
+      class="app-splash-logo"
+      src="assets/logo.png"
+      alt="FetchSafe" />
+  </div>
   <app-emergency-banner></app-emergency-banner>
   <app-shell-header *ngIf="showAppChrome" [layout]="shellHeaderLayout"></app-shell-header>
   <ion-router-outlet></ion-router-outlet>
