@@ -65,7 +65,6 @@ export class LoginPage implements OnInit {
     } catch (error: any) {
       await loading.dismiss();
       await this.showAlert('Login Failed', 'An unexpected error occurred. Please try again.');
-      console.error('Login error:', error);
     }
   }
 

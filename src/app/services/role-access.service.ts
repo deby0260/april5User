@@ -60,7 +60,6 @@ export class RoleAccessService {
           } else if (role === 'owner') {
             userRole = 'owner';
           }
-          console.log('Role detected from Registerd collection:', userRole);
         } else {
           // Fallback: check List Of Families collection
           const members = await this.familyService.getFamilyMembers(family.name);
@@ -68,12 +67,9 @@ export class RoleAccessService {
 
           if (userMember) {
             userRole = userMember.role;
-            console.log('Role detected from List Of Families:', userRole);
           }
         }
       }
-
-      console.log('Final user role:', userRole, 'for family:', family.name);
 
       return {
         role: userRole,
@@ -90,7 +86,6 @@ export class RoleAccessService {
         canChangeRoles: this.canChangeRoles(userRole)
       };
     } catch (error) {
-      console.error('Error getting user role:', error);
       return null;
     }
   }
@@ -231,7 +226,6 @@ export class RoleAccessService {
 
       return true;
     } catch (error) {
-      console.error('Error checking if user can remove member:', error);
       return false;
     }
   }
@@ -263,7 +257,6 @@ export class RoleAccessService {
 
       return true;
     } catch (error) {
-      console.error('Error checking if user can change member role:', error);
       return false;
     }
   }

@@ -73,7 +73,6 @@ export class NotificationEmailForwardService {
       }
       this.persistSentIds(sentIds);
     } catch (e) {
-      console.warn('Notification email via callable failed (deploy functions + configure Resend):', e);
     }
   }
 

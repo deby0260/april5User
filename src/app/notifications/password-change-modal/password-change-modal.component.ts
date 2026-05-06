@@ -104,7 +104,6 @@ export class PasswordChangeModalComponent {
         this.closeModal(true);
       }, 1000);
     } catch (error) {
-      console.error('Error changing password:', error);
       await this.showToast('An error occurred while changing password', 'danger');
     } finally {
       this.isSubmitting = false;

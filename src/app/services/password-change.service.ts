@@ -62,7 +62,6 @@ export class PasswordChangeService {
 
       return { success: true, message: 'Password change notification created' };
     } catch (error) {
-      console.error('Error creating password change notification:', error);
       return { success: false, message: 'Failed to create password change notification' };
     }
   }
@@ -103,7 +102,6 @@ export class PasswordChangeService {
 
       return { success: true, message: 'Password changed successfully' };
     } catch (error) {
-      console.error('Error changing password:', error);
       return { success: false, message: 'Failed to change password' };
     }
   }
@@ -122,7 +120,6 @@ export class PasswordChangeService {
 
       return { success: true, message: 'Password change marked as completed' };
     } catch (error) {
-      console.error('Error marking password change as completed:', error);
       return { success: false, message: 'Failed to mark password change as completed' };
     }
   }
@@ -151,7 +148,6 @@ export class PasswordChangeService {
         ...doc.data()
       } as PasswordChangeNotification));
     } catch (error) {
-      console.error('Error getting password change notifications:', error);
       return [];
     }
   }
@@ -179,7 +175,6 @@ export class PasswordChangeService {
       const userData = userSnapshot.docs[0].data();
       return userData['passwordChangeRequired'] === true && userData['passwordChanged'] !== true;
     } catch (error) {
-      console.error('Error checking password change requirement:', error);
       return false;
     }
   }

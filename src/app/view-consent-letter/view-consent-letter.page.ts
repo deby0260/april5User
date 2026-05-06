@@ -104,12 +104,8 @@ export class ViewConsentLetterPage implements OnInit {
 
       this.consentLetters = [];
 
-      console.log(`Found ${querySnapshot.size} consent letters for family: ${family.name}`);
-      console.log(`Owner name: ${owner.name}, Owner UID: ${owner.uid}`);
-
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        console.log('Consent letter data:', data);
 
         this.consentLetters.push({
           id: doc.id,
@@ -127,8 +123,6 @@ export class ViewConsentLetterPage implements OnInit {
 
       
       if (this.consentLetters.length === 0) {
-        console.log('No consent letters found with specific queries, trying broader search...');
-
         
         const allConsentQuery = collection(this.firestore, 'Consent Letters');
         const allQuerySnapshot = await getDocs(allConsentQuery);
@@ -141,8 +135,6 @@ export class ViewConsentLetterPage implements OnInit {
 
           
           if (familyMemberUIDs.includes(letterUID)) {
-            console.log('Found consent letter from family member:', data);
-
             this.consentLetters.push({
               id: doc.id,
               letter: data['letter'] || '',
@@ -177,7 +169,6 @@ export class ViewConsentLetterPage implements OnInit {
       await loading.dismiss();
     } catch (error) {
       await loading.dismiss();
-      console.error('Error loading consent letters:', error);
     } finally {
       this.isLoading = false;
     }

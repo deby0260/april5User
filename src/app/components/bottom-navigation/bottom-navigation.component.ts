@@ -61,7 +61,6 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
         this.userHasFamily = false;
       }
     } catch (error) {
-      console.error('Error checking family status:', error);
       this.userHasFamily = false;
     }
   }
@@ -94,7 +93,6 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
   async triggerPanic() {
     if (this.panicState !== 'idle') return;
     
-    console.log('Panic button clicked');
     this.panicState = 'pressing';
     this.triggerHapticFeedback();
     
@@ -104,20 +102,17 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
         () => this.onPanicAlertConfirmed()
       );
     } catch (error) {
-      console.error('Error showing panic alert modal:', error);
       this.panicState = 'idle';
     }
   }
 
   onPanicAlertConfirmed() {
     // Called when user confirms in the modal
-    console.log('Panic alert confirmed');
     this.panicState = 'idle';
   }
 
   onPanicAlertCancelled() {
     // Called when user cancels in the modal
-    console.log('Panic alert cancelled');
     this.panicState = 'idle';
   }
 

@@ -83,9 +83,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private async initializeNotifications() {
     try {
       await this.notificationService.initialize();
-      console.log('Notifications initialized in app component');
     } catch (error) {
-      console.error('Error initializing notifications in app component:', error);
     }
   }
 

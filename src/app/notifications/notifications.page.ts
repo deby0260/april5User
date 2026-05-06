@@ -130,10 +130,10 @@ export class NotificationsPage implements OnInit {
     const notifCol = collection(this.firestore, 'Notifications');
     const qNotifs = query(notifCol, where('recipientId', '==', u.uid));
     this.liveUnsubs.push(
-      onSnapshot(annCol, () => this.scheduleRefresh(), (e) => console.warn('Announcements listener failed', e))
+      onSnapshot(annCol, () => this.scheduleRefresh(), () => {})
     );
     this.liveUnsubs.push(
-      onSnapshot(qNotifs, () => this.scheduleRefresh(), (e) => console.warn('Notifications listener failed', e))
+      onSnapshot(qNotifs, () => this.scheduleRefresh(), () => {})
     );
   }
 
@@ -162,7 +162,6 @@ export class NotificationsPage implements OnInit {
         );
       }
     } catch (error) {
-      console.error('Error loading notifications:', error);
     } finally {
       this.isLoading = false;
     }
@@ -193,7 +192,6 @@ export class NotificationsPage implements OnInit {
       });
       return items;
     } catch (e) {
-      console.error('Error loading announcements:', e);
       return [];
     }
   }
@@ -402,7 +400,6 @@ export class NotificationsPage implements OnInit {
 
       await loading.dismiss();
     } catch (error) {
-      console.error('Error approving join request:', error);
       this.showToast('Error approving request. Please try again.');
     }
   }
@@ -440,7 +437,6 @@ export class NotificationsPage implements OnInit {
 
       await loading.dismiss();
     } catch (error) {
-      console.error('Error denying join request:', error);
       this.showToast('Error denying request. Please try again.');
     }
   }
@@ -471,7 +467,6 @@ export class NotificationsPage implements OnInit {
         this.showToast('Password changed successfully!');
       }
     } catch (error) {
-      console.error('Error handling password change notification:', error);
       this.showToast('Error opening password change dialog');
     }
   }

@@ -218,7 +218,6 @@ export class CreatedFamilyPage implements OnInit {
       };
 
     } catch (error) {
-      console.error('Error loading family data:', error);
       this.showToast('Error loading family data');
     } finally {
       this.isLoading = false;
@@ -329,7 +328,6 @@ export class CreatedFamilyPage implements OnInit {
       await loading.dismiss();
       await this.showToast(`${member.name}'s role updated to ${newRole}`);
     } catch (error) {
-      console.error('Error updating member role:', error);
       await this.showToast('Error updating member role');
     }
   }
@@ -386,7 +384,6 @@ export class CreatedFamilyPage implements OnInit {
       await loading.dismiss();
       await this.showToast(`${member.name} removed from family`);
     } catch (error) {
-      console.error('Error removing member:', error);
       await this.showToast('Error removing member');
     }
   }

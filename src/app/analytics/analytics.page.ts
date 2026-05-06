@@ -212,7 +212,6 @@ export class AnalyticsPage implements OnInit {
         this.panicMaxDaily30d = 0;
       }
     } catch (e) {
-      console.error('Analytics load failed', e);
       this.loadError = 'Could not load analytics. Try again.';
     } finally {
       this.isLoading = false;
@@ -238,7 +237,6 @@ export class AnalyticsPage implements OnInit {
       this.panicDaily30d = res.panicDaily30d;
       this.panicMaxDaily30d = Math.max(1, ...res.panicDaily30d.map((d) => d.count));
     } catch (e) {
-      console.warn('Safety analytics load failed', e);
       this.scanLogs = [];
       this.scanLogsPage = 1;
       this.panicTotal30d = 0;

@@ -47,7 +47,6 @@ export class ChildVerificationService {
         ...doc.data()
       } as PendingChildApproval));
     } catch (error) {
-      console.error('Error getting pending children:', error);
       throw error;
     }
   }
@@ -67,7 +66,6 @@ export class ChildVerificationService {
         ...doc.data()
       } as PendingChildApproval));
     } catch (error) {
-      console.error('Error getting all pending approvals:', error);
       throw error;
     }
   }
@@ -118,9 +116,7 @@ export class ChildVerificationService {
         'Admin Comments': adminComments
       });
 
-      console.log('Child approved successfully');
     } catch (error) {
-      console.error('Error approving child:', error);
       throw error;
     }
   }
@@ -142,9 +138,7 @@ export class ChildVerificationService {
         'Admin Comments': adminComments
       });
 
-      console.log('Child rejected successfully');
     } catch (error) {
-      console.error('Error rejecting child:', error);
       throw error;
     }
   }
@@ -168,7 +162,6 @@ export class ChildVerificationService {
 
       return stats;
     } catch (error) {
-      console.error('Error getting pending stats:', error);
       throw error;
     }
   }
@@ -185,7 +178,6 @@ export class ChildVerificationService {
         pending['Submitted By Name'].toLowerCase().includes(searchLower)
       );
     } catch (error) {
-      console.error('Error searching pending approvals:', error);
       throw error;
     }
   }
@@ -206,7 +198,6 @@ export class ChildVerificationService {
         ...doc.data()
       } as PendingChildApproval));
     } catch (error) {
-      console.error(`Error getting ${status} pending approvals:`, error);
       throw error;
     }
   }
@@ -219,9 +210,7 @@ export class ChildVerificationService {
       );
 
       await Promise.all(approvalPromises);
-      console.log(`Bulk approved ${pendingIds.length} children`);
     } catch (error) {
-      console.error('Error bulk approving children:', error);
       throw error;
     }
   }

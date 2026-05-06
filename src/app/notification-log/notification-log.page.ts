@@ -150,14 +150,14 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       onSnapshot(
         qPickups,
         () => this.schedulePickupLogRefresh(),
-        (err) => console.warn('Pickup log: Notifications listener', err)
+        () => {}
       )
     );
     this.pickupLogUnsubs.push(
       onSnapshot(
         qScans,
         () => this.schedulePickupLogRefresh(),
-        (err) => console.warn('Pickup log: ScanEvents listener', err)
+        () => {}
       )
     );
   }
@@ -166,8 +166,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
     try {
       const family = await this.familyService.getUserFamily();
       if (!family) return;
-
-      console.log('Checking for completed schedules without notification logs...');
 
       // Get all completed schedules for this family
       const schedulesCollection = collection(this.firestore, 'Schedules');
@@ -178,7 +176,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       );
 
       const schedulesSnapshot = await getDocs(completedSchedulesQuery);
-      console.log('Found', schedulesSnapshot.size, 'completed schedules');
 
       // Get existing notification logs for this family
       const notificationsCollection = collection(this.firestore, 'Notifications');
@@ -198,8 +195,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         }
       });
 
-      console.log('Found', existingScheduleIds.size, 'existing notification logs');
-
       const dismissedSchedules = this.loadDismissedPickupScheduleIds();
       let createdCount = 0;
       for (const scheduleDoc of schedulesSnapshot.docs) {
@@ -207,8 +202,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
         const scheduleData = scheduleDoc.data();
 
         if (!existingScheduleIds.has(scheduleId) && !dismissedSchedules.has(scheduleId)) {
-          console.log('Creating missing notification log for schedule:', scheduleId);
-
           const notificationData = {
             type: 'pickup_completion',
             title: `${scheduleData['Childs Name'] || 'Child'} picked up`,
@@ -229,15 +222,11 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       }
 
       if (createdCount > 0) {
-        console.log(`Created ${createdCount} missing notification logs`);
-
         await this.loadPickupNotifications();
       } else {
-        console.log('All completed schedules already have notification logs');
       }
 
     } catch (error) {
-      console.error('Error creating missing notification logs:', error);
     }
   }
 
@@ -262,7 +251,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       }
 
       
-      console.log('Querying pickup notifications for family:', family.name);
       const notificationsCollection = collection(this.firestore, 'Notifications');
       const q = query(
         notificationsCollection,
@@ -271,14 +259,12 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       );
 
       const querySnapshot = await getDocs(q);
-      console.log('Found', querySnapshot.size, 'pickup notifications');
       const allNotifications: PickupNotification[] = [];
       const dismissedSchedules = this.loadDismissedPickupScheduleIds();
       const dismissedDocIds = this.loadDismissedPickupDocIds();
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data() as any;
-        console.log('Processing notification:', docSnap.id, data);
 
         if (dismissedDocIds.has(docSnap.id)) {
           return;
@@ -308,7 +294,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
           message: typeof data['message'] === 'string' ? data['message'] : undefined,
           source: 'notification',
         };
-        console.log('Created notification object:', notification);
         allNotifications.push(notification);
       });
 
@@ -339,7 +324,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       }
 
     } catch (error) {
-      console.error('Error loading pickup notifications:', error);
     } finally {
       if (!silent) {
         this.isLoading = false;
@@ -649,7 +633,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
 
       return out;
     } catch (e) {
-      console.warn('ScanEvents not available or query failed (admin app writes here):', e);
       return [];
     }
   }
@@ -775,7 +758,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
           const notificationDoc = doc(this.firestore, 'Notifications', notificationId);
           await deleteDoc(notificationDoc);
         } catch (delErr) {
-          console.warn('Pickup log delete failed (rules/offline); row stays hidden locally:', delErr);
         }
       }
 
@@ -788,7 +770,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
 
       await this.showToast('Notification dismissed');
     } catch (error) {
-      console.error('Error dismissing notification:', error);
       await this.showToast('Error dismissing notification');
     }
   }

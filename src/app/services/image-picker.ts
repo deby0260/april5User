@@ -54,7 +54,6 @@ export class ImagePickerService {
 
         await actionSheet.present();
       } catch (error: any) {
-        console.error('Error selecting image:', error);
         resolve({ success: false, error: error.message || 'Failed to select image' });
       }
     });
@@ -83,7 +82,6 @@ export class ImagePickerService {
         };
       }
     } catch (error: any) {
-      console.error('Error getting image:', error);
       return {
         success: false,
         error: error.message || 'Failed to capture image'
@@ -141,7 +139,6 @@ export class ImagePickerService {
       const sizeInKB = sizeInBytes / 1024;
       return sizeInKB <= maxSizeKB;
     } catch (error) {
-      console.error('Error validating image size:', error);
       return false;
     }
   }

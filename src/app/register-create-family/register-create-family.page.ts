@@ -81,7 +81,6 @@ export class RegisterCreateFamilyPage implements OnInit {
         return;
       }
     } catch (error) {
-      console.error('Error checking user family status:', error);
     }
   }
 
@@ -93,7 +92,6 @@ export class RegisterCreateFamilyPage implements OnInit {
         this.hasPendingRequest = this.pendingRequests.length > 0;
       }
     } catch (error) {
-      console.error('Error loading pending requests:', error);
     }
   }
 
@@ -164,7 +162,6 @@ export class RegisterCreateFamilyPage implements OnInit {
       }
 
     } catch (error) {
-      console.error('Error loading families:', error);
       this.showToast('Error loading families. Please try again.');
     } finally {
       this.isLoading = false;
@@ -253,7 +250,6 @@ export class RegisterCreateFamilyPage implements OnInit {
         .sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
-      console.error('Error searching families in database:', error);
       // Silently fail - results will just be empty
     }
   }
@@ -304,7 +300,6 @@ export class RegisterCreateFamilyPage implements OnInit {
         this.showToast(result.message);
       }
     } catch (error) {
-      console.error('Error sending join request:', error);
       this.showToast('Error sending join request. Please try again.');
     }
   }
@@ -365,7 +360,6 @@ export class RegisterCreateFamilyPage implements OnInit {
         day: 'numeric'
       });
     } catch (error) {
-      console.error('Error formatting date:', error);
       return 'Unknown';
     }
   }

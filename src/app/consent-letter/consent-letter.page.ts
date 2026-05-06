@@ -66,9 +66,7 @@ export class ConsentLetterPage implements OnInit, AfterViewInit {
       const family = await this.familyService.getUserFamily();
       if (family) {
         this.consentData.familyName = family.name;
-        console.log('Family name set for consent letter:', family.name);
       } else {
-        console.log('No family found for user');
       }
     }
 
@@ -220,9 +218,6 @@ export class ConsentLetterPage implements OnInit, AfterViewInit {
         createdAt: serverTimestamp()
       };
 
-      console.log('Saving consent letter with data:', consentLetterData);
-
-
       const consentCollection = collection(this.firestore, 'Consent Letters');
       await addDoc(consentCollection, consentLetterData);
 
@@ -234,7 +229,6 @@ export class ConsentLetterPage implements OnInit, AfterViewInit {
 
     } catch (error) {
       await loading.dismiss();
-      console.error('Error saving consent letter:', error);
       await this.showToast('Error saving consent letter. Please try again.');
     } finally {
       this.isSaving = false;

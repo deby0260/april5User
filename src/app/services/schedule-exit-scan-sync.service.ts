@@ -92,7 +92,6 @@ export class ScheduleExitScanSyncService {
         }
       }
     } catch (e) {
-      console.warn('ScheduleExitScanSyncService: ScanEvents / Schedules sync failed:', e);
     }
   }
 

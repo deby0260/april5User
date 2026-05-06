@@ -90,7 +90,6 @@ export class SettingsPage implements OnInit {
         { merge: true }
       );
     } catch (e) {
-      console.warn('Could not sync email notification preference to profile', e);
     }
   }
 
@@ -107,7 +106,6 @@ export class SettingsPage implements OnInit {
         { merge: true }
       );
     } catch (e) {
-      console.warn('Could not sync SMS notification preference to profile', e);
     }
   }
 
@@ -127,7 +125,6 @@ export class SettingsPage implements OnInit {
         localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
       }
     } catch (e) {
-      console.warn('Could not load email notification preference from profile', e);
     }
   }
 
@@ -219,7 +216,6 @@ export class SettingsPage implements OnInit {
               await this.showToast('Logged out successfully');
               this.router.navigate(['/home-screen']);
             } catch (error) {
-              console.error('Logout error:', error);
               await this.showToast('Error logging out. Please try again.');
             }
           }

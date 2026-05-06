@@ -77,7 +77,6 @@ export class HomePage implements OnInit {
     if (this.currentUser) {
       this.userHasFamily = await this.familyService.checkUserHasFamily();
       this.userRole = await this.roleAccessService.getUserRole();
-      console.log('User role loaded:', this.userRole); // Debug log to verify role detection
     }
 
     this.loadWeatherData();
@@ -278,10 +277,7 @@ export class HomePage implements OnInit {
         parentName: row.parentName,
         status: row.status,
       }));
-
-      console.log(`Loaded ${this.upcomingPickups.length} upcoming pickups (merged) for family: ${family.name}`);
     } catch (error) {
-      console.error('Error loading upcoming pickups:', error);
     }
   }
 
@@ -296,7 +292,6 @@ export class HomePage implements OnInit {
             this.fetchWeatherData(lat, lon);
           },
           (error) => {
-            console.error('Error getting location:', error);
             // Fallback to a default location (Manila, Philippines)
             this.fetchWeatherData(14.5995, 120.9842);
           }
@@ -306,7 +301,6 @@ export class HomePage implements OnInit {
         this.fetchWeatherData(14.5995, 120.9842);
       }
     } catch (error) {
-      console.error('Error loading weather data:', error);
     }
   }
 
@@ -318,7 +312,6 @@ export class HomePage implements OnInit {
         this.weatherData = data;
       },
       error: (error) => {
-        console.error('Error fetching weather data:', error);
       }
     });
   }
@@ -587,11 +580,9 @@ export class HomePage implements OnInit {
       const schedulesCollection = collection(this.firestore, 'Schedules');
       await addDoc(schedulesCollection, testSchedule);
 
-      console.log('Test schedule created successfully');
       await this.loadUpcomingPickups(); // Reload data
 
     } catch (error) {
-      console.error('Error creating test schedule:', error);
     }
   }
 
@@ -633,8 +624,6 @@ export class HomePage implements OnInit {
       });
       await toast.present();
     } catch (error) {
-      console.error('Error sending test notification:', error);
-
       const toast = await this.toastController.create({
         message: 'Error sending test notification',
         duration: 3000,

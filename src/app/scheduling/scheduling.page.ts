@@ -177,11 +177,7 @@ export class SchedulingPage implements OnInit {
       this.familyMembers = await this.familyService.getFamilyMembers(family.name);
 
       this.children = await this.familyService.getFamilyChildren(family.name);
-
-      console.log('Family members loaded:', this.familyMembers);
-      console.log('Children loaded:', this.children);
     } catch (error) {
-      console.error('Error loading family data:', error);
     }
   }
 
@@ -198,12 +194,6 @@ export class SchedulingPage implements OnInit {
       if (userRole) {
         this.currentUserRole = userRole.role;
         this.canManageSchedule = userRole.canAccessScheduling;
-        console.log(
-          'Scheduling page - User role:',
-          this.currentUserRole,
-          'Can manage schedule:',
-          this.canManageSchedule
-        );
       } else {
         const members = await this.familyService.getFamilyMembers(family.name);
         const userMember = members.find((member) => member.uid === currentUser.uid);
@@ -211,11 +201,9 @@ export class SchedulingPage implements OnInit {
         if (userMember) {
           this.currentUserRole = userMember.role;
           this.canManageSchedule = userMember.role === 'owner' || userMember.role === 'parent';
-          console.log('Scheduling page - Fallback role from members:', this.currentUserRole);
         }
       }
     } catch (error) {
-      console.error('Error loading user role:', error);
     }
   }
 
@@ -707,12 +695,9 @@ export class SchedulingPage implements OnInit {
           ? `Updated ${totalDocs} schedule document(s).`
           : `Saved ${totalDocs} schedule(s) for ${this.scheduleData.selectedChildren.length} child(ren).`
       );
-
-      console.log(`Saved ${totalDocs} schedule document(s)`);
       this.goBack();
     } catch (error) {
       await loading.dismiss();
-      console.error('Error saving schedule:', error);
       await this.showToast('Error saving schedule. Please try again.');
     } finally {
       this.saveInProgress = false;
@@ -768,7 +753,6 @@ export class SchedulingPage implements OnInit {
         await addDoc(notificationsCollection, notificationData);
       }
     } catch (error) {
-      console.error('Error sending notification:', error);
     }
   }
 

@@ -50,7 +50,6 @@ export class ForgotPasswordPage implements OnInit {
 
       return !querySnapshot.empty;
     } catch (error) {
-      console.error('Error checking email existence:', error);
       return false;
     }
   }
@@ -109,7 +108,6 @@ export class ForgotPasswordPage implements OnInit {
 
     } catch (error: any) {
       await loading.dismiss();
-      console.error('Error sending reset link:', error);
 
       let errorMessage = 'Failed to send reset link. Please try again.';
 

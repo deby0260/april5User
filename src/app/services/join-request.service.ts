@@ -96,7 +96,6 @@ export class JoinRequestService {
 
       return { success: true, message: 'Join request sent successfully' };
     } catch (error) {
-      console.error('Error creating join request:', error);
       return { success: false, message: 'Failed to send join request' };
     }
   }
@@ -115,7 +114,6 @@ export class JoinRequestService {
       const querySnapshot = await getDocs(q);
       return !querySnapshot.empty;
     } catch (error) {
-      console.error('Error checking existing request:', error);
       return false;
     }
   }
@@ -136,7 +134,6 @@ export class JoinRequestService {
         ...doc.data()
       } as JoinRequest));
     } catch (error) {
-      console.error('Error getting user pending requests:', error);
       return [];
     }
   }
@@ -149,7 +146,6 @@ export class JoinRequestService {
       
       return { success: true, message: 'Join request cancelled successfully' };
     } catch (error) {
-      console.error('Error cancelling join request:', error);
       return { success: false, message: 'Failed to cancel join request' };
     }
   }
@@ -166,7 +162,6 @@ export class JoinRequestService {
 
       return { success: true, message: 'Join request approved successfully' };
     } catch (error) {
-      console.error('Error approving join request:', error);
       return { success: false, message: 'Failed to approve join request' };
     }
   }
@@ -182,7 +177,6 @@ export class JoinRequestService {
 
       return { success: true, message: 'Join request denied successfully' };
     } catch (error) {
-      console.error('Error denying join request:', error);
       return { success: false, message: 'Failed to deny join request' };
     }
   }
@@ -193,7 +187,6 @@ export class JoinRequestService {
       const notificationsCollection = collection(this.firestore, 'Notifications');
       await addDoc(notificationsCollection, notification);
     } catch (error) {
-      console.error('Error creating notification:', error);
     }
   }
 
@@ -212,7 +205,6 @@ export class JoinRequestService {
         ...doc.data()
       } as FamilyNotification));
     } catch (error) {
-      console.error('Error getting user notifications:', error);
       return [];
     }
   }
@@ -225,7 +217,6 @@ export class JoinRequestService {
         isRead: true
       });
     } catch (error) {
-      console.error('Error marking notification as read:', error);
     }
   }
 
@@ -242,7 +233,6 @@ export class JoinRequestService {
       }
       return null;
     } catch (error) {
-      console.error('Error getting join request:', error);
       return null;
     }
   }

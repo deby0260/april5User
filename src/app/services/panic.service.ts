@@ -76,7 +76,6 @@ export class PanicService {
       }
     } catch (e) {
       // If we cannot verify lock state (offline/rules), fail-safe: block re-triggering.
-      console.warn('Panic lock check failed; blocking trigger for safety:', e);
       const lockedAlert = await this.alertController.create({
         header: 'Cannot send panic right now',
         message:
@@ -107,7 +106,6 @@ export class PanicService {
           role: 'cancel',
           cssClass: 'panic-cancel-btn',
           handler: () => {
-            console.log('Panic alert cancelled');
             onCancel?.();
           }
         }
@@ -284,11 +282,9 @@ export class PanicService {
         currentUser.fullName || currentUser.email || 'Family Member'
       );
 
-      console.log('Panic alert saved to database and sent to family members');
       await this.showToast('Emergency alert sent. Admin and family notified.');
       
     } catch (error) {
-      console.error('Error sending panic alert:', error);
       await this.showToast('Error sending panic alert');
     }
   }

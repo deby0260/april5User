@@ -72,7 +72,6 @@ export class RegisterPage implements OnInit {
         }
       }
     } catch (error: any) {
-      console.error('Error selecting photo:', error);
       await this.showAlert('Image Selection Failed', 'An unexpected error occurred while selecting the image.');
     }
   }
@@ -223,7 +222,6 @@ export class RegisterPage implements OnInit {
     } catch (error: any) {
       await loading.dismiss();
       await this.showAlert('Registration Failed', 'An unexpected error occurred. Please try again.');
-      console.error('Registration error:', error);
     }
   }
 

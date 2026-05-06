@@ -196,7 +196,6 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       this.panicService.setActiveEmergencyBanner(this.activeEmergency);
       this.setCachedEmergency(this.activeEmergency);
     } catch (e) {
-      console.warn('EmergencyBanner: refresh query failed', e);
       // Keep showing last-known emergency state until we can confirm resolution.
       // (Do not clear caches on transient query failures.)
     }
