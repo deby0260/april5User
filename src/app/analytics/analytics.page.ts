@@ -7,7 +7,13 @@ import {
   TrendWeek,
   WeekBarDay,
 } from '../services/analytics-punctuality.service';
+import {
+  AnalyticsSafetyService,
+  PanicDailyBucket,
+  SafetyScanLogRow,
+} from '../services/analytics-safety.service';
 import { FamilyMember, FamilyService } from '../services/family.service';
+import { RoleAccessService } from '../services/role-access.service';
 
 @Component({
   selector: 'app-analytics',
@@ -41,13 +47,28 @@ export class AnalyticsPage implements OnInit {
   isLoading = false;
   loadError: string | null = null;
 
+  canViewSafetySections = false;
+  accessDeniedMessage: string | null = null;
+
+  scanLogsLoading = false;
+  scanLogsError: string | null = null;
+  scanLogs: SafetyScanLogRow[] = [];
+  scanLogsPage = 1;
+  readonly scanLogsPageSize = 5;
+
+  panicTotal30d = 0;
+  panicDaily30d: PanicDailyBucket[] = [];
+  panicMaxDaily30d = 0;
+
   /** SVG polyline `points` for weekly reliability trend */
   trendPolylinePoints = '';
 
   constructor(
     private location: Location,
     private analyticsPunctuality: AnalyticsPunctualityService,
-    private familyService: FamilyService
+    private analyticsSafety: AnalyticsSafetyService,
+    private familyService: FamilyService,
+    private roleAccess: RoleAccessService
   ) {}
 
   ngOnInit() {
@@ -55,7 +76,22 @@ export class AnalyticsPage implements OnInit {
   }
 
   async ionViewWillEnter() {
+    await this.refreshAccess();
     await this.refreshAnalytics();
+  }
+
+  private async refreshAccess(): Promise<void> {
+    try {
+      const role = await this.roleAccess.getUserRole();
+      this.canViewSafetySections = Boolean(role?.canAccessAnalytics);
+      this.accessDeniedMessage = this.canViewSafetySections
+        ? null
+        : this.roleAccess.getAccessDeniedMessage('analytics', role?.role);
+    } catch {
+      this.canViewSafetySections = false;
+      this.accessDeniedMessage =
+        'Only family owners and parents can access analytics.';
+    }
   }
 
   get scopeSelectModel(): string {
@@ -90,6 +126,7 @@ export class AnalyticsPage implements OnInit {
   async refreshAnalytics() {
     this.isLoading = true;
     this.loadError = null;
+    this.scanLogsError = null;
     try {
       const family = await this.familyService.getUserFamily();
       if (!family?.name) {
@@ -105,6 +142,10 @@ export class AnalyticsPage implements OnInit {
         this.trendPolylinePoints = '';
         this.fetcherOptions = [];
         this.selectedFetcherUid = null;
+        this.scanLogs = [];
+        this.panicTotal30d = 0;
+        this.panicDaily30d = [];
+        this.panicMaxDaily30d = 0;
         this.calculateProgress();
         return;
       }
@@ -161,12 +202,91 @@ export class AnalyticsPage implements OnInit {
 
       this.buildTrendSvg();
       this.calculateProgress();
+
+      if (this.canViewSafetySections) {
+        await this.refreshSafetyAnalytics(family.name);
+      } else {
+        this.scanLogs = [];
+        this.panicTotal30d = 0;
+        this.panicDaily30d = [];
+        this.panicMaxDaily30d = 0;
+      }
     } catch (e) {
       console.error('Analytics load failed', e);
       this.loadError = 'Could not load analytics. Try again.';
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async refreshSafetyAnalytics(familyName: string): Promise<void> {
+    this.scanLogsLoading = true;
+    this.scanLogsError = null;
+    try {
+      const fetcherUid = this.selectedFetcherUid === null ? null : this.selectedFetcherUid;
+      const fetcherLabel =
+        this.selectedFetcherUid === null
+          ? null
+          : this.fetcherOptions.find((o) => o.uid === this.selectedFetcherUid)?.label ?? null;
+      const res = await this.analyticsSafety.loadSafetyAnalytics(familyName, {
+        fetcherUid,
+        fetcherLabel,
+      });
+      this.scanLogs = res.scanLogs;
+      this.scanLogsPage = 1;
+      this.panicTotal30d = res.panicTotal30d;
+      this.panicDaily30d = res.panicDaily30d;
+      this.panicMaxDaily30d = Math.max(1, ...res.panicDaily30d.map((d) => d.count));
+    } catch (e) {
+      console.warn('Safety analytics load failed', e);
+      this.scanLogs = [];
+      this.scanLogsPage = 1;
+      this.panicTotal30d = 0;
+      this.panicDaily30d = [];
+      this.panicMaxDaily30d = 0;
+      this.scanLogsError = 'Could not load safety analytics. Try again.';
+    } finally {
+      this.scanLogsLoading = false;
+    }
+  }
+
+  panicBarHeightPct(count: number): number {
+    if (!this.panicMaxDaily30d) return 0;
+    return Math.round((count / this.panicMaxDaily30d) * 1000) / 10;
+  }
+
+  visibleScanLogs(): SafetyScanLogRow[] {
+    const start = (this.scanLogsPage - 1) * this.scanLogsPageSize;
+    const end = start + this.scanLogsPageSize;
+    return this.scanLogs.slice(start, end);
+  }
+
+  scanLogsTotalPages(): number {
+    const n = this.scanLogs.length;
+    return n > 0 ? Math.ceil(n / this.scanLogsPageSize) : 1;
+  }
+
+  scanLogsPageLabel(): string {
+    if (!this.scanLogs.length) return '';
+    return `Page ${this.scanLogsPage} of ${this.scanLogsTotalPages()}`;
+  }
+
+  canScanLogsPrev(): boolean {
+    return this.scanLogsPage > 1;
+  }
+
+  canScanLogsNext(): boolean {
+    return this.scanLogsPage < this.scanLogsTotalPages();
+  }
+
+  scanLogsPrevPage(): void {
+    if (!this.canScanLogsPrev()) return;
+    this.scanLogsPage -= 1;
+  }
+
+  scanLogsNextPage(): void {
+    if (!this.canScanLogsNext()) return;
+    this.scanLogsPage += 1;
   }
 
   private buildTrendSvg(): void {
@@ -217,9 +337,11 @@ export class AnalyticsPage implements OnInit {
       byUid.set(o.uid, { uid: o.uid, label: o.label });
     }
 
+    // Include all people who may act as fetcher, even if they have no schedules in the lookback,
+    // so the parent can still select them and see zero/empty analytics rather than disappearing.
     for (const m of members) {
-      if (m.role !== 'companion') continue;
-      const label = (m.name || '').trim() || 'Companion';
+      if (!['owner', 'parent', 'companion'].includes(m.role)) continue;
+      const label = (m.name || '').trim() || 'Family member';
       if (!byUid.has(m.uid)) {
         byUid.set(m.uid, { uid: m.uid, label });
       }

@@ -22,6 +22,9 @@
       </ion-note>
     </div>
 
+    <div *ngIf="!isLoading && accessDeniedMessage" class="error-banner">
+      {{ accessDeniedMessage }}
+    </div>
     <div *ngIf="loadError" class="error-banner">{{ loadError }}</div>
 
     <div *ngIf="isLoading" class="loading-row">
@@ -116,9 +119,6 @@
             </div>
           </div>
         </div>
-        <p class="reliability-sub">
-          Share of on-time pickups among completed + missed (past-due) pickups in the last 30 days{{ selectedFetcherUid === null ? '' : ' for this person' }}.
-        </p>
       </div>
     </div>
 
@@ -139,6 +139,68 @@
           <span *ngFor="let t of trend">{{ t.label }}</span>
         </div>
         <p *ngIf="!trend.length" class="empty-hint">Not enough history for a trend yet.</p>
+      </div>
+    </div>
+
+    <div class="safety-section" *ngIf="!isLoading && canViewSafetySections">
+      <h3>Panic usage (last 30 days)</h3>
+      <div class="safety-card">
+        <div class="panic-total-row">
+          <div class="panic-total">
+            <div class="panic-total-number">{{ panicTotal30d }}</div>
+            <div class="panic-total-label">Total panic alerts</div>
+          </div>
+          <div class="panic-total-hint">
+            Daily trend from <strong>Panic Alert</strong> logs.
+          </div>
+        </div>
+
+        <div class="panic-bars" *ngIf="panicDaily30d.length">
+          <div class="panic-day" *ngFor="let d of panicDaily30d" [title]="d.label + ': ' + d.count">
+            <div class="panic-bar" [style.height.%]="panicBarHeightPct(d.count)"></div>
+          </div>
+        </div>
+
+        <div class="panic-labels" *ngIf="panicDaily30d.length">
+          <span>{{ panicDaily30d[0].label }}</span>
+          <span>{{ panicDaily30d[panicDaily30d.length - 1].label }}</span>
+        </div>
+
+        <p *ngIf="!panicDaily30d.length" class="empty-hint">No panic usage yet.</p>
+      </div>
+    </div>
+
+    <div class="safety-section" *ngIf="!isLoading && canViewSafetySections">
+      <h3>Pickup history</h3>
+      <div class="safety-card">
+        <div *ngIf="scanLogsLoading" class="loading-row">
+          <ion-spinner name="crescent" color="primary"></ion-spinner>
+          <span>Loading pickup history…</span>
+        </div>
+
+        <div *ngIf="scanLogsError" class="error-banner">{{ scanLogsError }}</div>
+
+        <div class="log-list" *ngIf="!scanLogsLoading && !scanLogsError">
+          <div *ngIf="!scanLogs.length" class="empty-hint">No pickup history yet.</div>
+
+          <div class="log-row" *ngFor="let row of visibleScanLogs()">
+            <div class="log-dot" [class.entered]="row.action === 'Entered'" [class.exited]="row.action === 'Exited'"></div>
+            <div class="log-main">
+              <div class="log-title">{{ row.title }}</div>
+              <div class="log-meta">{{ row.whenFullLabel }}</div>
+            </div>
+          </div>
+
+          <div class="pagination-row" *ngIf="scanLogs.length > scanLogsPageSize">
+            <button type="button" class="pager-btn" [disabled]="!canScanLogsPrev()" (click)="scanLogsPrevPage()">
+              Previous
+            </button>
+            <div class="pager-label">{{ scanLogsPageLabel() }}</div>
+            <button type="button" class="pager-btn" [disabled]="!canScanLogsNext()" (click)="scanLogsNextPage()">
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

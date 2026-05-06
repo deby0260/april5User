@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Firestore, collection, getDocs, limit, orderBy, query, where } from '@angular/fire/firestore';
+import { Firestore, collection, getDocs, limit, query, where } from '@angular/fire/firestore';
 import { AuthService } from '../../services/auth';
 import { FamilyService } from '../../services/family.service';
 import { ActiveEmergencyBannerState, PanicService } from '../../services/panic.service';
@@ -130,7 +130,8 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
 
     const family = await this.familyService.getUserFamily();
     if (!family?.name) {
-      this.dismissBannerAndCaches();
+      // Keep showing cached/last-known banner if we can't resolve family yet.
+      // We'll try again on the next refresh tick.
       return;
     }
 
@@ -139,9 +140,7 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       const q = query(
         alertsRef,
         where('familyName', '==', family.name),
-        where('resolved', '==', false),
-        orderBy('createdAt', 'desc'),
-        limit(1)
+        limit(25)
       );
 
       const snap = await getDocs(q);
@@ -152,7 +151,36 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const data = snap.docs[0].data() as any;
+      // IMPORTANT UX RULE:
+      // Show/hide the banner based ONLY on the *latest* panic alert.
+      // (Older unresolved docs should not keep the banner alive once the most recent alert is resolved.)
+      const rows = snap.docs.map((docSnap) => {
+        const d = docSnap.data() as any;
+        const unresolved = !this.isResolvedPanicDoc(d);
+        let t = this.timestampMs(d?.createdAt ?? d?.alertTime);
+        // Newly created docs often have `serverTimestamp()` that hasn't materialized yet.
+        // If it's unresolved but timestamp is missing, treat it as newest to avoid banner flicker.
+        if (unresolved && t <= 0) {
+          t = Date.now();
+        }
+        return { docSnap, data: d, t, unresolved };
+      });
+
+      rows.sort((a, b) => b.t - a.t);
+
+      const latest = rows[0] ?? null;
+      const latestDoc = latest?.docSnap ?? null;
+      const latestData = latest?.data;
+      const latestResolved = latestData ? this.isResolvedPanicDoc(latestData) : true;
+
+      if (!latestDoc || latestResolved) {
+        this.activeEmergency = null;
+        this.panicService.setActiveEmergencyBanner(null);
+        this.clearAllEmergencyCaches();
+        return;
+      }
+
+      const data = latestData;
       const triggeredByName =
         data?.alertTriggeredBy ||
         data?.['Parents Name'] ||
@@ -169,8 +197,55 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       this.setCachedEmergency(this.activeEmergency);
     } catch (e) {
       console.warn('EmergencyBanner: refresh query failed', e);
-      this.dismissBannerAndCaches();
+      // Keep showing last-known emergency state until we can confirm resolution.
+      // (Do not clear caches on transient query failures.)
     }
+  }
+
+  private isResolvedPanicDoc(data: any): boolean {
+    const resolvedVal =
+      data?.resolved ??
+      data?.Resolved ??
+      data?.isResolved ??
+      data?.is_resolved ??
+      data?.resolvedAt ??
+      data?.resolved_at;
+
+    const statusRaw = data?.status ?? data?.Status ?? data?.STATE ?? data?.state;
+    const statusVal = String(statusRaw || '').trim().toLowerCase();
+
+    const resolvedStr = String(resolvedVal ?? '').trim().toLowerCase();
+    const resolvedTruthy =
+      resolvedVal === true ||
+      resolvedVal === 1 ||
+      resolvedVal === '1' ||
+      resolvedVal === 'true' ||
+      resolvedVal === 'TRUE' ||
+      resolvedStr === 'resolved' ||
+      resolvedStr === 'yes';
+
+    return (
+      resolvedTruthy ||
+      statusVal === 'resolved' ||
+      statusVal === 'closed' ||
+      statusVal === 'done'
+    );
+  }
+
+  private timestampMs(v: any): number {
+    if (v == null) return 0;
+    if (typeof v?.toMillis === 'function') return v.toMillis();
+    if (typeof v?.toDate === 'function') {
+      const d = v.toDate();
+      return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+    if (typeof v === 'object' && typeof v?.seconds === 'number') return v.seconds * 1000;
+    if (v instanceof Date) {
+      const t = v.getTime();
+      return Number.isNaN(t) ? 0 : t;
+    }
+    const d = new Date(v as string | number);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
   }
 
   get timeText(): string {
