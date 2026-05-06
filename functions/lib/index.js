@@ -277,7 +277,7 @@ exports.sendSmsOnNotificationCreate = functions.firestore
     const messageText = (typeof data.message === "string" && data.message.trim()) ||
         (typeof data.title === "string" && data.title.trim()) ||
         "You have an update in FetchSafe.";
-    const body = `[FetchSafe] ${messageText}`;
+    const body = ` ${messageText}`;
     try {
         const result = await sendOneIprogSms(iprog.apiToken, phone, body);
         functions.logger.info("IPROG SMS queued", { recipientId, type, phone, result });
