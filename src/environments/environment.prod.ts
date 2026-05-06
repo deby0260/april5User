@@ -14,8 +14,7 @@ export const environment = {
     appId: "1:418034723029:web:9f9bfea5f62a159bb91a5c",
     measurementId: "G-S18Q88ZZ29"
   },
-  notificationEmailCollection: 'mail',
+  firebaseFunctionsRegion: 'us-central1',
   maxNotificationEmailsPerSync: 30,
   notificationEmailMode: 'resend_callable' as const,
-  firebaseFunctionsRegion: 'us-central1',
 };

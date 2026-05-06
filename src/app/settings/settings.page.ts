@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Capacitor } from '@capacitor/core';
 import { AuthService, UserData } from '../services/auth';
 import { AlertController, ToastController } from '@ionic/angular';
-import { Firestore, doc, setDoc } from '@angular/fire/firestore';
+import { Firestore, doc, getDoc, setDoc } from '@angular/fire/firestore';
 import { NotificationService } from '../services/notification.service';
 
 interface AppSettings {
@@ -40,14 +40,16 @@ export class SettingsPage implements OnInit {
     private notificationService: NotificationService
   ) { }
 
-  ngOnInit() {
+  async ngOnInit() {
     this.currentUser = this.authService.getCurrentUser();
     this.loadSettings();
+    await this.mergeEmailPreferenceFromProfile();
   }
 
   /** Reconcile native listeners if the user changed settings in another session or before login. */
   async ionViewWillEnter() {
     this.loadSettings();
+    await this.mergeEmailPreferenceFromProfile();
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
   }
 
@@ -74,6 +76,7 @@ export class SettingsPage implements OnInit {
     }
   }
 
+  /** Aligns with Cloud Function `sendNotificationDigestEmails` (skips when false in Registerd). */
   private async syncEmailNotificationPreferenceToProfile() {
     const u = this.currentUser;
     if (!u?.uid) {
@@ -87,6 +90,26 @@ export class SettingsPage implements OnInit {
       );
     } catch (e) {
       console.warn('Could not sync email notification preference to profile', e);
+    }
+  }
+
+  private async mergeEmailPreferenceFromProfile() {
+    const uid = this.currentUser?.uid;
+    if (!uid) {
+      return;
+    }
+    try {
+      const snap = await getDoc(doc(this.firestore, 'Registerd', uid));
+      if (!snap.exists()) {
+        return;
+      }
+      const v = snap.get('emailNotifications');
+      if (typeof v === 'boolean') {
+        this.settings.emailNotifications = v;
+        localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
+      }
+    } catch (e) {
+      console.warn('Could not load email notification preference from profile', e);
     }
   }
 

@@ -20,17 +20,11 @@ export const environment = {
     appId: "1:418034723029:web:9f9bfea5f62a159bb91a5c",
     measurementId: "G-S18Q88ZZ29"
   },
-  /** Firestore collection for the "Trigger Email from Firestore" extension (default: `mail`). */
-  notificationEmailCollection: 'mail',
-  /** Cap how many notification emails are queued per visit to the Notifications screen. */
-  maxNotificationEmailsPerSync: 30,
-  /**
-   * firestore_queue: client writes to `notificationEmailCollection` (Trigger Email extension).
-   * resend_callable: HTTPS callable `sendNotificationDigestEmails` sends via Resend (API key on server only).
-   */
-  notificationEmailMode: 'resend_callable' as 'firestore_queue' | 'resend_callable',
-  /** Region where `sendNotificationDigestEmails` is deployed (must match Firebase). */
   firebaseFunctionsRegion: 'us-central1',
+  /** Cap how many notification emails are requested per visit to the Notifications screen. */
+  maxNotificationEmailsPerSync: 30,
+  /** Server callable `sendNotificationDigestEmails` sends via Resend (API key on server only). */
+  notificationEmailMode: 'resend_callable' as 'resend_callable',
 };
 
 /*

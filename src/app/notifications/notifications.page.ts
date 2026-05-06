@@ -1,6 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
-import { Firestore, collection, getDocs } from '@angular/fire/firestore';
+import { Firestore, collection, getDocs, onSnapshot, query, where } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { JoinRequestService, JoinRequest } from '../services/join-request.service';
 import { FamilyService } from '../services/family.service';
@@ -61,6 +61,8 @@ export class NotificationsPage implements OnInit {
   isLoading: boolean = false;
   detailModalOpen = false;
   detailNotification: Notification | null = null;
+  private liveUnsubs: Array<() => void> = [];
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private location: Location,
@@ -78,6 +80,61 @@ export class NotificationsPage implements OnInit {
 
   async ngOnInit() {
     await this.loadNotifications();
+  }
+
+  async ionViewWillEnter() {
+    await this.startLiveRefresh();
+  }
+
+  ionViewWillLeave() {
+    this.stopLiveRefresh();
+  }
+
+  ngOnDestroy(): void {
+    this.stopLiveRefresh();
+  }
+
+  private stopLiveRefresh(): void {
+    if (this.refreshTimer != null) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    for (const u of this.liveUnsubs) {
+      try {
+        u();
+      } catch {
+        /* noop */
+      }
+    }
+    this.liveUnsubs = [];
+  }
+
+  private scheduleRefresh(): void {
+    if (this.refreshTimer != null) {
+      clearTimeout(this.refreshTimer);
+    }
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      void this.loadNotifications();
+    }, 200);
+  }
+
+  private async startLiveRefresh(): Promise<void> {
+    this.stopLiveRefresh();
+    const u = this.authService.getCurrentUser();
+    if (!u?.uid) {
+      return;
+    }
+    // Announcements + personal Notifications update this page; listen and refresh.
+    const annCol = collection(this.firestore, NotificationsPage.ANNOUNCEMENTS_COLLECTION);
+    const notifCol = collection(this.firestore, 'Notifications');
+    const qNotifs = query(notifCol, where('recipientId', '==', u.uid));
+    this.liveUnsubs.push(
+      onSnapshot(annCol, () => this.scheduleRefresh(), (e) => console.warn('Announcements listener failed', e))
+    );
+    this.liveUnsubs.push(
+      onSnapshot(qNotifs, () => this.scheduleRefresh(), (e) => console.warn('Notifications listener failed', e))
+    );
   }
 
   async loadNotifications() {
@@ -101,8 +158,7 @@ export class NotificationsPage implements OnInit {
             title: n.title,
             displayMessage: this.formatNotificationDisplayMessage(n),
             time: n.time,
-          })),
-          currentUser.email
+          }))
         );
       }
     } catch (error) {

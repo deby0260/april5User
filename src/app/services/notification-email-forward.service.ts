@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, addDoc } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
 import { environment } from '../../environments/environment';
 
@@ -18,10 +17,7 @@ export interface EmailableNotificationItem {
   providedIn: 'root',
 })
 export class NotificationEmailForwardService {
-  constructor(
-    private firestore: Firestore,
-    private functions: Functions
-  ) {}
+  constructor(private functions: Functions) {}
 
   isEmailForwardingEnabled(): boolean {
     try {
@@ -37,14 +33,14 @@ export class NotificationEmailForwardService {
   }
 
   /**
-   * Sends one email per new notification: either Firestore `mail` docs (Trigger Email extension)
-   * or HTTPS callable that uses Resend on the server.
+   * Sends one email per new notification via HTTPS callable `sendNotificationDigestEmails`
+   * (Resend on the server; API key never in the app).
    */
-  async forwardNewNotifications(
-    items: EmailableNotificationItem[],
-    userEmail: string | undefined | null
-  ): Promise<void> {
-    if (!this.isEmailForwardingEnabled() || !userEmail?.trim()) {
+  async forwardNewNotifications(items: EmailableNotificationItem[]): Promise<void> {
+    if (environment.notificationEmailMode !== 'resend_callable') {
+      return;
+    }
+    if (!this.isEmailForwardingEnabled()) {
       return;
     }
 
@@ -58,39 +54,6 @@ export class NotificationEmailForwardService {
 
     const batch = pending.slice(0, maxPerSync);
 
-    if (environment.notificationEmailMode === 'resend_callable') {
-      await this.forwardViaResendCallable(batch, sentIds);
-      return;
-    }
-
-    const collectionName = environment.notificationEmailCollection ?? 'mail';
-    const mailCol = collection(this.firestore, collectionName);
-
-    for (const n of batch) {
-      const text = `${n.time}\n\n${n.displayMessage}`;
-      const html = `<p><strong>${this.escapeHtml(n.time)}</strong></p><p>${this.escapeHtml(n.displayMessage).replace(/\n/g, '<br/>')}</p>`;
-      try {
-        await addDoc(mailCol, {
-          to: userEmail.trim(),
-          message: {
-            subject: `FetchSafe: ${n.title}`,
-            text,
-            html,
-          },
-        });
-        sentIds.add(n.id);
-      } catch (e) {
-        console.warn('Notification email queue failed (check Firestore rules / Trigger Email extension):', e);
-      }
-    }
-
-    this.persistSentIds(sentIds);
-  }
-
-  private async forwardViaResendCallable(
-    batch: EmailableNotificationItem[],
-    sentIds: Set<string>
-  ): Promise<void> {
     try {
       const fn = httpsCallable(this.functions, 'sendNotificationDigestEmails');
       const res = await fn({
@@ -110,7 +73,7 @@ export class NotificationEmailForwardService {
       }
       this.persistSentIds(sentIds);
     } catch (e) {
-      console.warn('Notification email via Resend callable failed (deploy functions + set resend config):', e);
+      console.warn('Notification email via callable failed (deploy functions + configure Resend):', e);
     }
   }
 
@@ -131,13 +94,5 @@ export class NotificationEmailForwardService {
     const arr = [...ids];
     const trimmed = arr.length > MAX_STORED_IDS ? arr.slice(arr.length - MAX_STORED_IDS) : arr;
     localStorage.setItem(SENT_IDS_KEY, JSON.stringify(trimmed));
-  }
-
-  private escapeHtml(s: string): string {
-    return s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 }

@@ -22,10 +22,6 @@
       </ion-note>
     </div>
 
-    <div class="analytics-caption">
-      Based on <strong>Schedules</strong> and <strong>ScanEvents</strong> (last 30 days; on-time = completed within 15 minutes after scheduled time).
-    </div>
-
     <div *ngIf="loadError" class="error-banner">{{ loadError }}</div>
 
     <div *ngIf="isLoading" class="loading-row">

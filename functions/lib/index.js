@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendNotificationDigestEmails = exports.sendSmsOnNotificationCreate = void 0;
+exports.sendEmailOnScanEventCreate = exports.sendEmailOnNotificationCreate = exports.sendNotificationDigestEmails = exports.sendSmsOnNotificationCreate = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const twilio_1 = __importDefault(require("twilio"));
@@ -173,6 +173,141 @@ function escapeHtml(s) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
 }
+
+async function getAuthEmailForUid(uid) {
+    if (!uid || uid === "system" || uid === "system_auto" || uid === "auto") {
+        return null;
+    }
+    try {
+        const user = await admin.auth().getUser(uid);
+        const email = user.email?.trim() ?? "";
+        return email || null;
+    }
+    catch {
+        return null;
+    }
+}
+
+async function isEmailNotificationsEnabledForUid(uid) {
+    if (!uid) {
+        return false;
+    }
+    try {
+        const snap = await admin.firestore().doc(`Registerd/${uid}`).get();
+        // default true if field missing; explicit false disables
+        if (!snap.exists) {
+            return true;
+        }
+        const v = snap.get("emailNotifications");
+        return v !== false;
+    }
+    catch {
+        return true;
+    }
+}
+
+/** Email for items that appear in the mobile Notifications page (Firestore `Notifications` docs). */
+exports.sendEmailOnNotificationCreate = functions.firestore
+    .document("Notifications/{docId}")
+    .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    const recipientId = data?.recipientId;
+    const title = (typeof data?.title === "string" && data.title.trim()) ? data.title.trim() : "Notification";
+    const message = (typeof data?.message === "string" && data.message.trim()) ? data.message.trim() : "";
+    if (!recipientId) {
+        return null;
+    }
+    const enabled = await isEmailNotificationsEnabledForUid(recipientId);
+    if (!enabled) {
+        return null;
+    }
+    const to = await getAuthEmailForUid(recipientId);
+    if (!to) {
+        functions.logger.warn("Email notification skipped: no auth email", { recipientId, docId: context.params.docId });
+        return null;
+    }
+    const resend = getResendConfig();
+    if (!resend) {
+        functions.logger.warn("Email notification skipped: Resend not configured");
+        return null;
+    }
+    const createdAt = data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt ? new Date(data.createdAt) : new Date());
+    const timeLabel = (createdAt instanceof Date && !Number.isNaN(createdAt.getTime())) ? createdAt.toLocaleString("en-US") : "Unknown time";
+    const subject = `FetchSafe: ${title}`;
+    const text = `${timeLabel}\n\n${message || title}`;
+    const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p>${escapeHtml(message || title).replace(/\n/g, "<br/>")}</p>`;
+    try {
+        await sendOneResend(resend.apiKey, resend.from, to, subject, text, html);
+        await snap.ref.set({ emailedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    catch (e) {
+        functions.logger.error("Resend send failed (notification onCreate)", { docId: context.params.docId, err: String(e) });
+    }
+    return null;
+});
+
+/** Email for items that appear in the Notification Log page via `ScanEvents` (Entered/Exited scans). */
+exports.sendEmailOnScanEventCreate = functions.firestore
+    .document("ScanEvents/{docId}")
+    .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    const familyName = (typeof data?.familyName === "string" && data.familyName.trim()) ? data.familyName.trim() : "";
+    const action = (typeof data?.action === "string" && data.action.trim()) ? data.action.trim() : "Scan";
+    const scannedAt = data?.scannedAt?.toDate ? data.scannedAt.toDate() : (data?.scannedAt ? new Date(data.scannedAt) : new Date());
+    const timeLabel = (scannedAt instanceof Date && !Number.isNaN(scannedAt.getTime())) ? scannedAt.toLocaleString("en-US") : "Unknown time";
+    if (!familyName) {
+        return null;
+    }
+    const resend = getResendConfig();
+    if (!resend) {
+        functions.logger.warn("Email scan skipped: Resend not configured");
+        return null;
+    }
+    // Send to all family members (Registerd docs) who have emailNotifications enabled and a Firebase Auth email.
+    try {
+        const regSnap = await admin.firestore()
+            .collection("Registerd")
+            .where("familyName", "==", familyName)
+            .get();
+        const recipients = [];
+        for (const docSnap of regSnap.docs) {
+            const uid = docSnap.id;
+            const enabled = await isEmailNotificationsEnabledForUid(uid);
+            if (!enabled) {
+                continue;
+            }
+            const email = await getAuthEmailForUid(uid);
+            if (email) {
+                recipients.push({ uid, email });
+            }
+        }
+        if (recipients.length === 0) {
+            return null;
+        }
+        const who = String(data?.authorizerName || data?.authorizerEmail || data?.authorizerUid || "").trim();
+        const title = action === "Entered" ? "School check-in" : action === "Exited" ? "School check-out" : "School scan";
+        const subtitle = who ? `By: ${who}` : "";
+        const subject = `FetchSafe: ${title}`;
+        const body = [subtitle, `Family: ${familyName}`].filter(Boolean).join("\n");
+        const text = `${timeLabel}\n\n${title}\n${body}`.trim();
+        const htmlBody = escapeHtml([title, body].filter(Boolean).join("\n")).replace(/\n/g, "<br/>");
+        const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p>${htmlBody}</p>`;
+        for (const r of recipients) {
+            try {
+                await sendOneResend(resend.apiKey, resend.from, r.email, subject, text, html);
+            }
+            catch (e) {
+                functions.logger.error("Resend send failed (scan onCreate)", { docId: context.params.docId, uid: r.uid, err: String(e) });
+            }
+        }
+        await snap.ref.set({ emailedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    catch (e) {
+        functions.logger.error("Scan email handler failed", { docId: context.params.docId, err: String(e) });
+    }
+    return null;
+});
+
 /**
  * Sends notification digest emails via Resend. API key lives in functions config only.
  * Caller must be signed in; destination is always that user's Firebase Auth email.

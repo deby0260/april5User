@@ -1,8 +1,0 @@
-{
-  "name": "fetchsafe-vercel-api",
-  "private": true,
-  "dependencies": {
-    "@vercel/node": "^3.2.29",
-    "firebase-admin": "^12.6.0"
-  }
-}

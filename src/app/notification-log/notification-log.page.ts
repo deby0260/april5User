@@ -14,6 +14,7 @@ import {
 import { AuthService } from '../services/auth';
 import { FamilyService } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
+import { NotificationEmailForwardService } from '../services/notification-email-forward.service';
 import { LoadingController, ToastController } from '@ionic/angular';
 
 const DISMISSED_SCAN_IDS_KEY = 'fetchsafe-notification-log-dismissed-scan-ids';
@@ -70,6 +71,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
     private authService: AuthService,
     private familyService: FamilyService,
     private panicService: PanicService,
+    private notificationEmailForwardService: NotificationEmailForwardService,
     private loadingController: LoadingController,
     private toastController: ToastController
   ) { }
@@ -316,6 +318,17 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       });
 
       this.categorizeNotifications(merged);
+
+      if (currentUser.email && this.notificationEmailForwardService.isEmailForwardingEnabled()) {
+        await this.notificationEmailForwardService.forwardNewNotifications(
+          merged.map((n) => ({
+            id: n.id,
+            title: n.title,
+            displayMessage: this.buildDetailBody(n),
+            time: this.detailTimestamp(n),
+          }))
+        );
+      }
 
     } catch (error) {
       console.error('Error loading pickup notifications:', error);
