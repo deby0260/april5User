@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Solid white background -->
+    <item android:drawable="@android:color/white" />
+
+    <!-- Centered fetchSafe logo/image -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/image" />
+    </item>
+</layer-list>
+
