@@ -41,6 +41,7 @@ export class ViewSchedulePage implements OnInit {
   isLoading: boolean = true;
   familyName: string = '';
   userRole: UserRole | null = null;
+  private reminderScheduledForSession = false;
   /** Pickers for inline edit (parents/owners only) */
   familyMembers: FamilyMember[] = [];
   children: any[] = [];
@@ -370,6 +371,25 @@ export class ViewSchedulePage implements OnInit {
       this.schedules.sort((a, b) => this.compareSchedulesChronologically(a, b));
 
       await this.loadFamilyPickersForEdit();
+
+      // Assigned fetchers/companions: schedule 30-min reminders on their device.
+      // (This mirrors SMS reminders behavior, but as in-app/local notifications.)
+      if (!this.reminderScheduledForSession) {
+        this.reminderScheduledForSession = true;
+        const myUid = currentUser.uid;
+        const mine = this.schedules.filter((s) => String(s.fetcherUID || '').trim() === myUid);
+        for (const s of mine) {
+          // Only schedules with basic fields can be scheduled.
+          if (!s.id || !s.date || !s.time || !s.childName || !s.familyName) continue;
+          await this.notificationService.schedulePickupReminder30m({
+            scheduleId: s.id,
+            familyName: s.familyName,
+            childName: s.childName,
+            scheduleDateYmd: this.toLocalYmd(s.date),
+            scheduleTime: s.time,
+          });
+        }
+      }
 
     } catch (error) {
     } finally {

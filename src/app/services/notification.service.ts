@@ -27,6 +27,17 @@ export interface NotificationData {
   actionUrl?: string;
 }
 
+type PickupReminderExtra = {
+  kind: 'pickup_reminder_30m';
+  /** Unique id for idempotent writes / schedules (e.g. scheduleId + reminderAt). */
+  reminderKey: string;
+  scheduleId?: string;
+  scheduleDate?: string;
+  scheduleTime?: string;
+  familyName?: string;
+  childName?: string;
+};
+
 @Injectable({
   providedIn: 'root'
 })
@@ -36,6 +47,7 @@ export class NotificationService {
   private nativeStackAttached = false;
 
   private static readonly SETTINGS_STORAGE_KEY = 'fetchsafe-settings';
+  private static readonly PICKUP_REMINDER_KEYS_STORAGE = 'fetchsafe-pickup-reminder-keys-v1';
 
   constructor(
     private platform: Platform,
@@ -183,6 +195,9 @@ export class NotificationService {
       LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
         this.handleLocalNotificationAction(notification);
       });
+      LocalNotifications.addListener('localNotificationReceived', (notification) => {
+        void this.handleLocalNotificationReceived(notification);
+      });
     } else {
     }
   }
@@ -218,6 +233,21 @@ export class NotificationService {
   }
 
   private handleLocalNotificationAction(notification: any) {
+  }
+
+  private async handleLocalNotificationReceived(notification: any): Promise<void> {
+    try {
+      if (!this.readAppNotificationsEnabled()) {
+        return;
+      }
+      const extra = (notification?.extra || {}) as Partial<PickupReminderExtra> & Record<string, unknown>;
+      if (extra.kind !== 'pickup_reminder_30m' || !extra.reminderKey) {
+        return;
+      }
+      await this.writePickupReminderToInAppNotifications(extra as PickupReminderExtra);
+    } catch {
+      // Intentionally silent.
+    }
   }
 
   private handlePanicNotification(notification: PushNotificationSchema) {
@@ -326,6 +356,195 @@ export class NotificationService {
       await this.saveNotificationToHistory(notificationData);
     } catch (error) {
     }
+  }
+
+  /**
+   * Schedules a local reminder for the currently signed-in user (typically the assigned fetcher/companion)
+   * and ensures the reminder shows up inside the in-app Notifications feed at delivery time.
+   *
+   * Dedupe:
+   * - device-level: localStorage remembers scheduled reminder keys
+   * - Firestore-level: reminder doc id is deterministic (reminderKey)
+   */
+  async schedulePickupReminder30m(input: {
+    scheduleId: string;
+    familyName: string;
+    childName: string;
+    scheduleDateYmd: string; // YYYY-MM-DD
+    scheduleTime: string; // "HH:mm" or "h:mm AM/PM"
+  }): Promise<void> {
+    try {
+      if (!this.readAppNotificationsEnabled()) {
+        return;
+      }
+      if (!Capacitor.isNativePlatform()) {
+        return;
+      }
+      const reminderAt = this.computeReminderAtLocal(input.scheduleDateYmd, input.scheduleTime, 30);
+      if (!reminderAt) {
+        return;
+      }
+      const now = Date.now();
+      if (reminderAt.getTime() <= now + 5_000) {
+        // Too late / immediate; skip rather than spamming on open.
+        return;
+      }
+
+      const reminderKey = `pickupReminder30m:${input.scheduleId}:${reminderAt.toISOString()}`;
+      if (this.hasScheduledPickupReminderKey(reminderKey)) {
+        return;
+      }
+
+      const title = 'Pickup in 30 minutes';
+      const body = `${input.childName} pickup is scheduled at ${this.formatClockTo12h(input.scheduleTime)}.`;
+
+      const notification: LocalNotificationSchema = {
+        title,
+        body,
+        id: this.localNotificationIdFromKey(reminderKey),
+        schedule: { at: reminderAt },
+        actionTypeId: 'schedule',
+        extra: {
+          kind: 'pickup_reminder_30m',
+          reminderKey,
+          scheduleId: input.scheduleId,
+          scheduleDate: input.scheduleDateYmd,
+          scheduleTime: input.scheduleTime,
+          familyName: input.familyName,
+          childName: input.childName,
+        } satisfies PickupReminderExtra,
+      };
+
+      await LocalNotifications.schedule({ notifications: [notification] });
+      this.rememberScheduledPickupReminderKey(reminderKey);
+    } catch {
+      // Intentionally silent.
+    }
+  }
+
+  private localNotificationIdFromKey(key: string): number {
+    // Stable 31-bit int hash for Capacitor LocalNotifications id
+    let h = 0;
+    for (let i = 0; i < key.length; i++) {
+      h = ((h << 5) - h + key.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h) % 2_000_000_000;
+  }
+
+  private hasScheduledPickupReminderKey(key: string): boolean {
+    try {
+      const raw = localStorage.getItem(NotificationService.PICKUP_REMINDER_KEYS_STORAGE);
+      if (!raw) return false;
+      const arr = JSON.parse(raw) as string[];
+      if (!Array.isArray(arr)) return false;
+      return arr.includes(key);
+    } catch {
+      return false;
+    }
+  }
+
+  private rememberScheduledPickupReminderKey(key: string): void {
+    try {
+      const raw = localStorage.getItem(NotificationService.PICKUP_REMINDER_KEYS_STORAGE);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      const next = Array.isArray(arr) ? arr : [];
+      if (!next.includes(key)) {
+        next.push(key);
+      }
+      // Keep bounded so it doesn't grow forever.
+      const trimmed = next.slice(-400);
+      localStorage.setItem(
+        NotificationService.PICKUP_REMINDER_KEYS_STORAGE,
+        JSON.stringify(trimmed)
+      );
+    } catch {
+      // noop
+    }
+  }
+
+  private computeReminderAtLocal(
+    dateYmd: string,
+    timeStr: string,
+    minutesBefore: number
+  ): Date | null {
+    const dparts = String(dateYmd || '').split('-').map((n) => parseInt(n, 10));
+    if (dparts.length !== 3 || dparts.some((n) => Number.isNaN(n))) {
+      return null;
+    }
+    const [y, m, day] = dparts;
+    const minutes = this.parseClockToMinutes(timeStr);
+    if (minutes == null) {
+      return null;
+    }
+    const base = new Date(y, m - 1, day, 0, 0, 0, 0);
+    const at = new Date(base.getTime() + minutes * 60_000);
+    at.setMinutes(at.getMinutes() - minutesBefore);
+    return at;
+  }
+
+  private parseClockToMinutes(timeStr: string): number | null {
+    const t = String(timeStr || '').trim();
+    if (!t) return null;
+    const ampm = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)$/);
+    if (ampm) {
+      let h = parseInt(ampm[1], 10);
+      const m = parseInt(ampm[2], 10);
+      const ap = ampm[4].toUpperCase();
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      if (ap === 'PM' && h !== 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    }
+    const h24 = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (h24) {
+      const h = parseInt(h24[1], 10);
+      const m = parseInt(h24[2], 10);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return Math.min(23, Math.max(0, h)) * 60 + Math.min(59, Math.max(0, m));
+    }
+    return null;
+  }
+
+  private formatClockTo12h(timeStr: string): string {
+    const t = String(timeStr || '').trim();
+    if (!t) return '';
+    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (m) {
+      const h24 = parseInt(m[1], 10);
+      const min = m[2];
+      if (Number.isNaN(h24)) return t;
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12 = h24 % 12 || 12;
+      return `${h12}:${min} ${ampm}`;
+    }
+    // Already in AM/PM
+    return t;
+  }
+
+  private async writePickupReminderToInAppNotifications(extra: PickupReminderExtra): Promise<void> {
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser?.uid) return;
+
+    const message = `30 minutes before pick up schedule: ${extra.childName || 'Child'} at ${this.formatClockTo12h(extra.scheduleTime || '')}.`;
+    const ref = doc(this.firestore, 'Notifications', extra.reminderKey);
+    await setDoc(
+      ref,
+      {
+        type: 'schedule',
+        title: 'Pickup Reminder',
+        message,
+        recipientId: currentUser.uid,
+        senderId: currentUser.uid,
+        senderName: currentUser.fullName || currentUser.email || 'Family Member',
+        familyName: extra.familyName || '',
+        scheduleDate: extra.scheduleDate || '',
+        scheduleTime: extra.scheduleTime || '',
+        scheduleId: extra.scheduleId || '',
+        isRead: false,
+        createdAt: new Date(),
+      },
+      { merge: true }
+    );
   }
 
   private async saveNotificationToHistory(notificationData: NotificationData) {
