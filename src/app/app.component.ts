@@ -16,12 +16,8 @@ export class AppComponent implements OnInit, OnDestroy {
   showAppChrome = false;
   /** Home-style header vs back + logo + bell */
   shellHeaderLayout: 'main' | 'with-back' = 'main';
-  /** Startup splash overlay */
-  showSplash = true;
 
   private readonly destroy$ = new Subject<void>();
-  private readonly splashMinMs = 600;
-  private splashShownAt = Date.now();
 
   private readonly shellBackRoutes = new Set([
     '/notifications',
@@ -46,15 +42,12 @@ export class AppComponent implements OnInit, OnDestroy {
       )
       .subscribe((e) => {
         this.refreshAppChrome(e.urlAfterRedirects);
-        this.hideSplashAfterMinimum();
       });
   }
 
   async ngOnInit() {
     await this.platform.ready();
     await this.initializeNotifications();
-    // In case NavigationEnd never fires (very rare), ensure splash still goes away.
-    this.hideSplashAfterMinimum();
   }
 
   ngOnDestroy(): void {
@@ -85,16 +78,5 @@ export class AppComponent implements OnInit, OnDestroy {
       await this.notificationService.initialize();
     } catch (error) {
     }
-  }
-
-  private hideSplashAfterMinimum(): void {
-    if (!this.showSplash) {
-      return;
-    }
-    const elapsed = Date.now() - this.splashShownAt;
-    const remaining = Math.max(0, this.splashMinMs - elapsed);
-    setTimeout(() => {
-      this.showSplash = false;
-    }, remaining);
   }
 }

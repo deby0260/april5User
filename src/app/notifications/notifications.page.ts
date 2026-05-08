@@ -143,7 +143,7 @@ export class NotificationsPage implements OnInit {
       const currentUser = this.authService.getCurrentUser();
 
       const [announcementItems, userItems] = await Promise.all([
-        this.fetchAnnouncements(),
+        this.fetchAnnouncements(currentUser),
         currentUser ? this.loadUserNotificationItems(currentUser.uid) : Promise.resolve([]),
       ]);
 
@@ -167,8 +167,15 @@ export class NotificationsPage implements OnInit {
     }
   }
 
-  private async fetchAnnouncements(): Promise<Notification[]> {
+  /**
+   * Admin announcements are global docs; filter so users only see announcements
+   * created on/after their account `createdAt` (new users shouldn't see old emails).
+   */
+  private async fetchAnnouncements(currentUser: any | null): Promise<Notification[]> {
     try {
+      const userCreatedAtMs =
+        currentUser?.createdAt != null ? this.getTimestampMs(currentUser.createdAt) : 0;
+
       const col = collection(this.firestore, NotificationsPage.ANNOUNCEMENTS_COLLECTION);
       const snap = await getDocs(col);
       const items: Notification[] = [];
@@ -178,6 +185,10 @@ export class NotificationsPage implements OnInit {
           body?: string;
           createdAt?: unknown;
         };
+        const annMs = this.getTimestampMs(data.createdAt);
+        if (userCreatedAtMs > 0 && annMs > 0 && annMs < userCreatedAtMs) {
+          return;
+        }
         const body = typeof data.body === 'string' ? data.body : '';
         const title = (typeof data.title === 'string' && data.title.trim()) ? data.title.trim() : 'Announcement';
         items.push({
@@ -186,7 +197,7 @@ export class NotificationsPage implements OnInit {
           title,
           message: body,
           time: this.formatTime(data.createdAt),
-          sortTime: this.getTimestampMs(data.createdAt),
+          sortTime: annMs,
           isRead: true,
         });
       });

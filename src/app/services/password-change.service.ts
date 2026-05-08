@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, doc, updateDoc, query, where, getDocs, addDoc, serverTimestamp } from '@angular/fire/firestore';
 import { AuthService } from './auth';
+import { Auth as FirebaseAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from '@angular/fire/auth';
 
 export interface PasswordChangeNotification {
   id?: string;
@@ -23,7 +24,8 @@ export class PasswordChangeService {
 
   constructor(
     private firestore: Firestore,
-    private authService: AuthService
+    private authService: AuthService,
+    private auth: FirebaseAuth
   ) { }
 
   /**
@@ -81,6 +83,26 @@ export class PasswordChangeService {
         return { success: false, message: 'Password has already been changed. You cannot change it again.' };
       }
 
+      // Update password in Firebase Auth (this is what login checks first).
+      // Requires a recent sign-in; the user is currently signed in when using the modal.
+      const firebaseUser = this.auth.currentUser;
+      if (!firebaseUser) {
+        // Critical: if we can’t update Firebase Auth, the user would still need the old password to log in.
+        return {
+          success: false,
+          message: 'Please log out and log back in, then change your password again.',
+        };
+      }
+      try {
+        await updatePassword(firebaseUser, newPassword);
+      } catch (e: any) {
+        const code = String(e?.code || '');
+        if (code.includes('auth/requires-recent-login')) {
+          return { success: false, message: 'Please log out and log back in, then change your password again.' };
+        }
+        return { success: false, message: 'Failed to update password. Please try again.' };
+      }
+
       // Update password in Firestore
       const userDocRef = doc(this.firestore, 'Registerd', currentUser.uid);
       await updateDoc(userDocRef, {
@@ -102,6 +124,73 @@ export class PasswordChangeService {
 
       return { success: true, message: 'Password changed successfully' };
     } catch (error) {
+      return { success: false, message: 'Failed to change password' };
+    }
+  }
+
+  /**
+   * Change password from Settings using current password (reauth).
+   * This updates Firebase Auth (login credential) + mirrors the value in Registerd.
+   */
+  async changePasswordFromSettings(input: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const currentUser = this.authService.getCurrentUser();
+      if (!currentUser?.uid) {
+        return { success: false, message: 'User not authenticated' };
+      }
+
+      const firebaseUser = this.auth.currentUser;
+      if (!firebaseUser?.email) {
+        return { success: false, message: 'Please log out and log back in, then try again.' };
+      }
+
+      try {
+        const cred = EmailAuthProvider.credential(firebaseUser.email, input.currentPassword);
+        await reauthenticateWithCredential(firebaseUser, cred);
+      } catch (e: any) {
+        const code = String(e?.code || '');
+        if (code.includes('auth/wrong-password') || code.includes('auth/invalid-credential')) {
+          return { success: false, message: 'Current password is incorrect.' };
+        }
+        return { success: false, message: 'Unable to verify your current password. Please try again.' };
+      }
+
+      try {
+        await updatePassword(firebaseUser, input.newPassword);
+      } catch (e: any) {
+        const code = String(e?.code || '');
+        if (code.includes('auth/weak-password')) {
+          return { success: false, message: 'Password is too weak. Please choose a stronger password.' };
+        }
+        if (code.includes('auth/requires-recent-login')) {
+          return { success: false, message: 'Please log out and log back in, then try again.' };
+        }
+        return { success: false, message: 'Failed to update password. Please try again.' };
+      }
+
+      const userDocRef = doc(this.firestore, 'Registerd', currentUser.uid);
+      await updateDoc(userDocRef, {
+        password: input.newPassword,
+        passwordConfirmation: input.newPassword,
+        passwordChanged: true,
+        passwordChangeRequired: false,
+        passwordChangedAt: serverTimestamp()
+      });
+
+      const updatedUser = {
+        ...currentUser,
+        password: input.newPassword,
+        passwordConfirmation: input.newPassword,
+        passwordChanged: true,
+        passwordChangeRequired: false,
+      };
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+      return { success: true, message: 'Password changed successfully' };
+    } catch {
       return { success: false, message: 'Failed to change password' };
     }
   }

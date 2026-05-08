@@ -5,6 +5,7 @@ import { AuthService, UserData } from '../services/auth';
 import { AlertController, ToastController } from '@ionic/angular';
 import { Firestore, doc, getDoc, setDoc } from '@angular/fire/firestore';
 import { NotificationService } from '../services/notification.service';
+import { PasswordChangeService } from '../services/password-change.service';
 
 interface AppSettings {
   appNotifications: boolean;
@@ -37,7 +38,8 @@ export class SettingsPage implements OnInit {
     private firestore: Firestore,
     private alertController: AlertController,
     private toastController: ToastController,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private passwordChangeService: PasswordChangeService
   ) { }
 
   async ngOnInit() {
@@ -191,10 +193,70 @@ export class SettingsPage implements OnInit {
   }
 
   async changePassword() {
+    const u = this.authService.getCurrentUser();
+    if (!u?.uid) {
+      await this.showToast('Please log in first.');
+      return;
+    }
+
     const alert = await this.alertController.create({
       header: 'Change Password',
-      message: 'This feature will be available soon. For now, you can reset your password from the login screen.',
-      buttons: ['OK']
+      message: 'Enter your current password to confirm, then set a new password.',
+      inputs: [
+        {
+          name: 'currentPassword',
+          type: 'password',
+          placeholder: 'Current password',
+        },
+        {
+          name: 'newPassword',
+          type: 'password',
+          placeholder: 'New password (min 6 characters)',
+        },
+        {
+          name: 'confirmPassword',
+          type: 'password',
+          placeholder: 'Confirm new password',
+        },
+      ],
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Update',
+          handler: async (data) => {
+            const currentPassword = String(data?.currentPassword || '');
+            const newPassword = String(data?.newPassword || '');
+            const confirmPassword = String(data?.confirmPassword || '');
+
+            if (!currentPassword || !newPassword || !confirmPassword) {
+              await this.showToast('Please fill in all fields.');
+              return false;
+            }
+            if (newPassword.length < 6) {
+              await this.showToast('New password must be at least 6 characters.');
+              return false;
+            }
+            if (newPassword !== confirmPassword) {
+              await this.showToast('New passwords do not match.');
+              return false;
+            }
+
+            const result = await this.passwordChangeService.changePasswordFromSettings({
+              currentPassword,
+              newPassword,
+            });
+            if (!result.success) {
+              await this.showToast(result.message);
+              return false;
+            }
+
+            // Refresh local reference for UI (AuthService storage already updated by service).
+            this.currentUser = this.authService.getCurrentUser();
+            await this.showToast('Password updated successfully.');
+            return true;
+          }
+        }
+      ]
     });
     await alert.present();
   }

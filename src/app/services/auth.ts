@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc } from '@angular/fire/firestore';
+import { Firestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from '@angular/fire/firestore';
 import { Auth as FirebaseAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from '@angular/fire/auth';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -69,7 +69,9 @@ export class AuthService {
 
       const userDataWithUid: UserData = {
         ...userData,
-        uid: uid
+        uid: uid,
+        // Snapshot join time so new users don't see past announcements.
+        createdAt: (userData as any)?.createdAt ?? serverTimestamp(),
       };
 
       // Use setDoc with doc() to create a document with UID as the document ID
@@ -115,6 +117,20 @@ export class AuthService {
         }
 
         const userData = userDocSnap.data() as UserData;
+
+        // Backfill createdAt when missing (keeps old users stable, helps new users filter announcements).
+        if (!userData?.createdAt) {
+          const ct = userCredential.user?.metadata?.creationTime;
+          const parsed = ct ? new Date(ct) : null;
+          if (parsed && !Number.isNaN(parsed.getTime())) {
+            userData.createdAt = parsed;
+            try {
+              await setDoc(userDocRef, { createdAt: parsed }, { merge: true });
+            } catch {
+              // noop
+            }
+          }
+        }
 
         // Verify email matches
         if (userData.email !== email) {
