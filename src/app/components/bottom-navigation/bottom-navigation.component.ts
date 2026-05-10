@@ -3,6 +3,7 @@ import { NavigationEnd, Router } from '@angular/router';
 import { FamilyService } from '../../services/family.service';
 import { PanicService } from '../../services/panic.service';
 import { AuthService } from '../../services/auth';
+import { NotificationFeedsBackgroundService } from '../../services/notification-feeds-background.service';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 
@@ -21,7 +22,8 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
     private router: Router,
     private familyService: FamilyService,
     private panicService: PanicService,
-    private authService: AuthService
+    private authService: AuthService,
+    private notificationFeedsBackground: NotificationFeedsBackgroundService
   ) { }
 
   async ngOnInit() {
@@ -39,6 +41,7 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
       });
 
     void this.checkUserFamilyStatus();
+    void this.notificationFeedsBackground.ensureRunning();
 
     // Keep nav state consistent across route changes.
     this.router.events
@@ -48,7 +51,14 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
       )
       .subscribe(() => {
         void this.checkUserFamilyStatus();
+        void this.notificationFeedsBackground.ensureRunning();
       });
+  }
+
+  ngOnDestroy(): void {
+    this.notificationFeedsBackground.stop();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   async checkUserFamilyStatus() {
@@ -143,11 +153,6 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
     if ((window as any).navigator?.vibrate) {
       (window as any).navigator.vibrate(50);
     }
-  }
-
-  ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
   }
 
   isCurrentRoute(route: string): boolean {

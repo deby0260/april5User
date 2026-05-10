@@ -1,12 +1,14 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
-import { Firestore, collection, getDocs, onSnapshot, query, where } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { JoinRequestService, JoinRequest } from '../services/join-request.service';
 import { FamilyService } from '../services/family.service';
 import { PasswordChangeService } from '../services/password-change.service';
 import { NotificationEmailForwardService } from '../services/notification-email-forward.service';
+import { NotificationInboxFeedService } from '../services/notification-inbox-feed.service';
+import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
 import { AlertController, ToastController, LoadingController, ModalController } from '@ionic/angular';
+import { Subscription } from 'rxjs';
 
 interface Notification {
   id: string;
@@ -43,10 +45,7 @@ interface Notification {
   styleUrls: ['./notifications.page.scss'],
   standalone: false
 })
-export class NotificationsPage implements OnInit {
-  /** Firestore collection for school-wide admin posts (console may show plural "Announcements") */
-  private static readonly ANNOUNCEMENTS_COLLECTION = 'Announcements';
-
+export class NotificationsPage implements OnInit, OnDestroy {
   private static readonly WEEKDAY_ORDER: Record<string, number> = {
     Monday: 0,
     Tuesday: 1,
@@ -61,17 +60,17 @@ export class NotificationsPage implements OnInit {
   isLoading: boolean = false;
   detailModalOpen = false;
   detailNotification: Notification | null = null;
-  private liveUnsubs: Array<() => void> = [];
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private inboxSub = new Subscription();
 
   constructor(
     private location: Location,
-    private firestore: Firestore,
     private authService: AuthService,
     private joinRequestService: JoinRequestService,
     private familyService: FamilyService,
     private passwordChangeService: PasswordChangeService,
     private notificationEmailForwardService: NotificationEmailForwardService,
+    private notificationInboxFeed: NotificationInboxFeedService,
+    private notificationFeedsBackground: NotificationFeedsBackgroundService,
     private alertController: AlertController,
     private toastController: ToastController,
     private loadingController: LoadingController,
@@ -79,78 +78,29 @@ export class NotificationsPage implements OnInit {
   ) { }
 
   async ngOnInit() {
-    await this.loadNotifications();
+    this.inboxSub.add(
+      this.notificationInboxFeed.inbox$.subscribe((list) => {
+        this.notifications = list as Notification[];
+      })
+    );
+    this.inboxSub.add(
+      this.notificationInboxFeed.inboxLoading$.subscribe((loading) => {
+        this.isLoading = loading;
+      })
+    );
+    await this.notificationFeedsBackground.ensureRunning();
   }
 
   async ionViewWillEnter() {
-    await this.startLiveRefresh();
+    await this.notificationFeedsBackground.ensureRunning();
   }
 
-  ionViewWillLeave() {
-    this.stopLiveRefresh();
-  }
-
-  ngOnDestroy(): void {
-    this.stopLiveRefresh();
-  }
-
-  private stopLiveRefresh(): void {
-    if (this.refreshTimer != null) {
-      clearTimeout(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-    for (const u of this.liveUnsubs) {
-      try {
-        u();
-      } catch {
-        /* noop */
-      }
-    }
-    this.liveUnsubs = [];
-  }
-
-  private scheduleRefresh(): void {
-    if (this.refreshTimer != null) {
-      clearTimeout(this.refreshTimer);
-    }
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = null;
-      void this.loadNotifications();
-    }, 200);
-  }
-
-  private async startLiveRefresh(): Promise<void> {
-    this.stopLiveRefresh();
-    const u = this.authService.getCurrentUser();
-    if (!u?.uid) {
-      return;
-    }
-    // Announcements + personal Notifications update this page; listen and refresh.
-    const annCol = collection(this.firestore, NotificationsPage.ANNOUNCEMENTS_COLLECTION);
-    const notifCol = collection(this.firestore, 'Notifications');
-    const qNotifs = query(notifCol, where('recipientId', '==', u.uid));
-    this.liveUnsubs.push(
-      onSnapshot(annCol, () => this.scheduleRefresh(), () => {})
-    );
-    this.liveUnsubs.push(
-      onSnapshot(qNotifs, () => this.scheduleRefresh(), () => {})
-    );
-  }
-
-  async loadNotifications() {
+  /** Reload inbox + optional email forward (after approve/deny/password, etc.). */
+  async loadNotifications(): Promise<void> {
+    const currentUser = this.authService.getCurrentUser();
     try {
-      this.isLoading = true;
-      const currentUser = this.authService.getCurrentUser();
-
-      const [announcementItems, userItems] = await Promise.all([
-        this.fetchAnnouncements(currentUser),
-        currentUser ? this.loadUserNotificationItems(currentUser.uid) : Promise.resolve([]),
-      ]);
-
-      this.notifications = [...announcementItems, ...userItems].sort(
-        (a, b) => b.sortTime - a.sortTime
-      );
-
+      const list = await this.notificationInboxFeed.refresh();
+      this.notifications = list as Notification[];
       if (currentUser?.email && this.notificationEmailForwardService.isEmailForwardingEnabled()) {
         await this.notificationEmailForwardService.forwardNewNotifications(
           this.notifications.map((n) => ({
@@ -161,88 +111,13 @@ export class NotificationsPage implements OnInit {
           }))
         );
       }
-    } catch (error) {
-    } finally {
-      this.isLoading = false;
+    } catch {
+      /* noop */
     }
   }
 
-  /**
-   * Admin announcements are global docs; filter so users only see announcements
-   * created on/after their account `createdAt` (new users shouldn't see old emails).
-   */
-  private async fetchAnnouncements(currentUser: any | null): Promise<Notification[]> {
-    try {
-      const userCreatedAtMs =
-        currentUser?.createdAt != null ? this.getTimestampMs(currentUser.createdAt) : 0;
-
-      const col = collection(this.firestore, NotificationsPage.ANNOUNCEMENTS_COLLECTION);
-      const snap = await getDocs(col);
-      const items: Notification[] = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data() as {
-          title?: string;
-          body?: string;
-          createdAt?: unknown;
-        };
-        const annMs = this.getTimestampMs(data.createdAt);
-        if (userCreatedAtMs > 0 && annMs > 0 && annMs < userCreatedAtMs) {
-          return;
-        }
-        const body = typeof data.body === 'string' ? data.body : '';
-        const title = (typeof data.title === 'string' && data.title.trim()) ? data.title.trim() : 'Announcement';
-        items.push({
-          id: docSnap.id,
-          type: 'admin_announcement',
-          title,
-          message: body,
-          time: this.formatTime(data.createdAt),
-          sortTime: annMs,
-          isRead: true,
-        });
-      });
-      return items;
-    } catch (e) {
-      return [];
-    }
-  }
-
-  private async loadUserNotificationItems(uid: string): Promise<Notification[]> {
-    const realNotifications = await this.joinRequestService.getUserNotifications(uid);
-    return Promise.all(
-      realNotifications.map(async (notification) => {
-        let joinRequestStatus: 'pending' | 'approved' | 'denied' | undefined;
-        let joinRequestRole: 'parent' | 'companion' | undefined;
-
-        if (notification.type === 'join_request' && notification.joinRequestId) {
-          const jr = await this.joinRequestService.getJoinRequestById(notification.joinRequestId);
-          if (jr) {
-            joinRequestStatus = jr.status;
-            joinRequestRole = jr.role;
-          }
-        }
-
-        return {
-          id: notification.id || '',
-          type: notification.type,
-          title: notification.title,
-          message:
-            notification.type === 'panic_alert' && notification.senderName
-              ? `Emergency alert triggered by ${notification.senderName}`
-              : notification.message,
-          time: this.formatTime(notification.createdAt),
-          sortTime: this.getTimestampMs(notification.createdAt),
-          isRead: notification.isRead,
-          joinRequestId: notification.joinRequestId,
-          joinRequestStatus,
-          joinRequestRole,
-          senderId: notification.senderId,
-          senderName: notification.senderName,
-          familyName: notification.familyName,
-          passwordChanged: (notification as any).passwordChanged === true,
-        } as Notification;
-      })
-    );
+  ngOnDestroy(): void {
+    this.inboxSub.unsubscribe();
   }
 
   formatTime(timestamp: any): string {
@@ -506,10 +381,22 @@ export class NotificationsPage implements OnInit {
     out = out.replace(/Dates:\s*((?:\d{4}-\d{2}-\d{2})(?:\s*,\s*\d{4}-\d{2}-\d{2})*)/gi, (_, datesPart: string) => {
       return `Dates: ${this.formatIsoDatesListWithRanges(datesPart)}`;
     });
-    out = out.replace(/\bat\s+(\d{1,2}):(\d{2})(?::\d{2})?\b/gi, (_m, h: string, min: string) => {
-      const hour24 = Math.min(23, Math.max(0, parseInt(h, 10)));
-      return `at ${this.format24hTo12h(hour24, min)}`;
-    });
+    // Normalise "at HH:mm" / "at HH:mm:ss" → "at h:mm AM/PM", but leave the
+    // string ALONE when the writer already supplied a meridiem. Without the
+    // meridiem-aware capture this regex was double-tagging messages like
+    // "at 8:30 PM" — `\b` only sees the digits, so it appended "AM" and the
+    // inbox displayed "at 8:30 AM PM". The `(\s*[AaPp][Mm])?` group is the
+    // signal: when present, return the original substring verbatim.
+    out = out.replace(
+      /\bat\s+(\d{1,2}):(\d{2})(?::\d{2})?(\.\d+)?(\s*[AaPp][Mm])?\b/g,
+      (match, h: string, min: string, _frac: string | undefined, ampm: string | undefined) => {
+        if (ampm) {
+          return match;
+        }
+        const hour24 = Math.min(23, Math.max(0, parseInt(h, 10)));
+        return `at ${this.format24hTo12h(hour24, min)}`;
+      },
+    );
     out = out.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_m, y: string, mo: string, d: string) =>
       this.formatYmdUs(`${y}-${mo}-${d}`)
     );

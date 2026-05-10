@@ -27,9 +27,9 @@
     </div>
     <div *ngIf="loadError" class="error-banner">{{ loadError }}</div>
 
-    <div *ngIf="isLoading" class="loading-row">
-      <ion-spinner name="crescent" color="primary"></ion-spinner>
-      <span>Loading analytics…</span>
+    <div *ngIf="isLoading" class="loading-section">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading analytics...</p>
     </div>
 
     <div class="stats-grid" *ngIf="!isLoading">
@@ -55,7 +55,7 @@
     </div>
 
     <div class="chart-section" *ngIf="!isLoading">
-      <h3>Pick Ups (last 7 days)</h3>
+      <h3>Pick Ups (this week)</h3>
       <div class="chart-container">
         <div class="chart-placeholder">
           <div class="chart-legend">
@@ -143,11 +143,34 @@
     </div>
 
     <div class="safety-section" *ngIf="!isLoading && canViewSafetySections">
-      <h3>Panic usage (last 30 days)</h3>
+      <div class="safety-section-header">
+        <h3>{{ panicMonthHeading }}</h3>
+        <div class="panic-month-control" *ngIf="panicSelectorBounds">
+          <ion-datetime-button
+            class="panic-month-trigger"
+            datetime="panicMonthPicker"
+            aria-label="Choose month for panic usage">
+          </ion-datetime-button>
+
+          <ion-modal class="panic-month-modal" [keepContentsMounted]="true">
+            <ng-template>
+              <ion-datetime
+                id="panicMonthPicker"
+                presentation="month-year"
+                [min]="panicMinIso"
+                [max]="panicMaxIso"
+                [value]="panicSelectedIso"
+                (ionChange)="onPanicDateChange($event)"
+                showDefaultButtons="false">
+              </ion-datetime>
+            </ng-template>
+          </ion-modal>
+        </div>
+      </div>
       <div class="safety-card">
         <div class="panic-total-row">
           <div class="panic-total">
-            <div class="panic-total-number">{{ panicTotal30d }}</div>
+            <div class="panic-total-number">{{ panicTotalMonth }}</div>
             <div class="panic-total-label">Total panic alerts</div>
           </div>
           <div class="panic-total-hint">
@@ -155,48 +178,80 @@
           </div>
         </div>
 
-        <div class="panic-bars" *ngIf="panicDaily30d.length">
-          <div class="panic-day" *ngFor="let d of panicDaily30d" [title]="d.label + ': ' + d.count">
+        <div class="panic-bars" *ngIf="panicDailyMonth.length">
+          <div class="panic-day" *ngFor="let d of panicDailyMonth" [title]="d.label + ': ' + d.count">
             <div class="panic-bar" [style.height.%]="panicBarHeightPct(d.count)"></div>
           </div>
         </div>
 
-        <div class="panic-labels" *ngIf="panicDaily30d.length">
-          <span>{{ panicDaily30d[0].label }}</span>
-          <span>{{ panicDaily30d[panicDaily30d.length - 1].label }}</span>
+        <div class="panic-labels" *ngIf="panicDailyMonth.length">
+          <span>{{ panicDailyMonth[0].label }}</span>
+          <span>{{ panicDailyMonth[panicDailyMonth.length - 1].label }}</span>
         </div>
 
-        <p *ngIf="!panicDaily30d.length" class="empty-hint">No panic usage yet.</p>
+        <p *ngIf="!panicDailyMonth.length" class="empty-hint">No panic usage yet.</p>
       </div>
     </div>
 
     <div class="safety-section" *ngIf="!isLoading && canViewSafetySections">
       <h3>Pickup history</h3>
       <div class="safety-card">
-        <div *ngIf="scanLogsLoading" class="loading-row">
+        <div *ngIf="pickupHistoryLoading" class="loading-row">
           <ion-spinner name="crescent" color="primary"></ion-spinner>
           <span>Loading pickup history…</span>
         </div>
 
-        <div *ngIf="scanLogsError" class="error-banner">{{ scanLogsError }}</div>
+        <div *ngIf="pickupHistoryError" class="error-banner">{{ pickupHistoryError }}</div>
 
-        <div class="log-list" *ngIf="!scanLogsLoading && !scanLogsError">
-          <div *ngIf="!scanLogs.length" class="empty-hint">No pickup history yet.</div>
+        <div class="pickup-history-list" *ngIf="!pickupHistoryLoading && !pickupHistoryError">
+          <div *ngIf="!pickupHistory.length" class="empty-hint">No scheduled pickups in the last 30 days.</div>
 
-          <div class="log-row" *ngFor="let row of visibleScanLogs()">
-            <div class="log-dot" [class.entered]="row.action === 'Entered'" [class.exited]="row.action === 'Exited'"></div>
-            <div class="log-main">
-              <div class="log-title">{{ row.title }}</div>
-              <div class="log-meta">{{ row.whenFullLabel }}</div>
+          <div
+            class="pickup-row"
+            *ngFor="let row of visiblePickupHistory()"
+            [ngClass]="pickupStatusClass(row.status)">
+            <div class="pickup-row-header">
+              <div class="pickup-row-title">
+                <span class="pickup-status-dot" [ngClass]="pickupStatusClass(row.status)"></span>
+                <span class="pickup-child-name">Pickup of {{ row.childName }}</span>
+              </div>
+              <span class="pickup-status-pill" [ngClass]="pickupStatusClass(row.status)">
+                {{ row.statusLabel }}
+              </span>
+            </div>
+
+            <div class="pickup-row-meta">
+              <span class="pickup-meta-line">
+                <ion-icon name="calendar-outline" aria-hidden="true"></ion-icon>
+                {{ row.scheduleDateLabel }}
+              </span>
+              <span class="pickup-meta-line">
+                <ion-icon name="time-outline" aria-hidden="true"></ion-icon>
+                Scheduled at <strong>{{ row.scheduledTimeLabel }}</strong>
+                <span class="pickup-fetcher" *ngIf="row.fetcherName">
+                  &nbsp;•&nbsp;{{ row.fetcherName }}
+                </span>
+              </span>
+            </div>
+
+            <div class="pickup-times">
+              <div class="pickup-time-chip arrived">
+                <span class="chip-label">Arrived</span>
+                <span class="chip-value">{{ row.arrivedAtLabel || '—' }}</span>
+              </div>
+              <div class="pickup-time-chip exited">
+                <span class="chip-label">Exited</span>
+                <span class="chip-value">{{ row.exitedAtLabel || '—' }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="pagination-row" *ngIf="scanLogs.length > scanLogsPageSize">
-            <button type="button" class="pager-btn" [disabled]="!canScanLogsPrev()" (click)="scanLogsPrevPage()">
+          <div class="pagination-row" *ngIf="pickupHistory.length > pickupHistoryPageSize">
+            <button type="button" class="pager-btn" [disabled]="!canPickupHistoryPrev()" (click)="pickupHistoryPrevPage()">
               Previous
             </button>
-            <div class="pager-label">{{ scanLogsPageLabel() }}</div>
-            <button type="button" class="pager-btn" [disabled]="!canScanLogsNext()" (click)="scanLogsNextPage()">
+            <div class="pager-label">{{ pickupHistoryPageLabel() }}</div>
+            <button type="button" class="pager-btn" [disabled]="!canPickupHistoryNext()" (click)="pickupHistoryNextPage()">
               Next
             </button>
           </div>

@@ -9,8 +9,8 @@ import {
 } from '../services/analytics-punctuality.service';
 import {
   AnalyticsSafetyService,
-  PanicDailyBucket,
-  SafetyScanLogRow,
+  PanicSelectorBounds,
+  PickupHistoryRow,
 } from '../services/analytics-safety.service';
 import { FamilyMember, FamilyService } from '../services/family.service';
 import { RoleAccessService } from '../services/role-access.service';
@@ -44,21 +44,41 @@ export class AnalyticsPage implements OnInit {
   circumference = 2 * Math.PI * 26;
   strokeDashoffset = 0;
 
-  isLoading = false;
+  // Start in the loading state so the very first render shows the spinner
+  // instead of momentarily flashing the zero-initialized stat cards before
+  // `ionViewWillEnter` kicks off the real data fetch.
+  isLoading = true;
   loadError: string | null = null;
 
   canViewSafetySections = false;
   accessDeniedMessage: string | null = null;
 
-  scanLogsLoading = false;
-  scanLogsError: string | null = null;
-  scanLogs: SafetyScanLogRow[] = [];
-  scanLogsPage = 1;
-  readonly scanLogsPageSize = 5;
+  /**
+   * Tracks an in-flight role/access lookup so `refreshAnalytics` can safely
+   * fire in parallel with `refreshAccess` and just-in-time await the access
+   * result before deciding whether to load the safety analytics section.
+   */
+  private accessReadyPromise: Promise<void> | null = null;
 
-  panicTotal30d = 0;
-  panicDaily30d: PanicDailyBucket[] = [];
-  panicMaxDaily30d = 0;
+  pickupHistoryLoading = false;
+  pickupHistoryError: string | null = null;
+  pickupHistory: PickupHistoryRow[] = [];
+  pickupHistoryPage = 1;
+  readonly pickupHistoryPageSize = 5;
+
+  /**
+   * Raw panic alert timestamps (ms) from local Jan 1 of the prior calendar year.
+   * Sorted ascending. Month buckets are derived client-side.
+   */
+  private panicAlertMs: number[] = [];
+  panicSelectorBounds: PanicSelectorBounds | null = null;
+  /** Local calendar year shown in the panic year picker. */
+  selectedPanicYear: number | null = null;
+  /** 1–12, local calendar month in the panic month picker. */
+  selectedPanicMonth: number | null = null;
+  panicTotalMonth = 0;
+  panicDailyMonth: { ymd: string; label: string; count: number }[] = [];
+  panicMaxDailyMonth = 0;
 
   /** SVG polyline `points` for weekly reliability trend */
   trendPolylinePoints = '';
@@ -76,8 +96,19 @@ export class AnalyticsPage implements OnInit {
   }
 
   async ionViewWillEnter() {
-    await this.refreshAccess();
-    await this.refreshAnalytics();
+    // Flip to loading synchronously BEFORE any await so re-entries to the page
+    // (which retain the previous render state) immediately hide stale data and
+    // show the spinner while data fetches in parallel.
+    this.isLoading = true;
+    // Kick off role-access in parallel with the heavy analytics fetch.
+    // `refreshAnalytics` will await this promise just before its safety
+    // section, so the gate check stays race-free while we save one round trip.
+    this.accessReadyPromise = this.refreshAccess();
+    try {
+      await Promise.all([this.accessReadyPromise, this.refreshAnalytics()]);
+    } finally {
+      this.accessReadyPromise = null;
+    }
   }
 
   private async refreshAccess(): Promise<void> {
@@ -126,7 +157,7 @@ export class AnalyticsPage implements OnInit {
   async refreshAnalytics() {
     this.isLoading = true;
     this.loadError = null;
-    this.scanLogsError = null;
+    this.pickupHistoryError = null;
     try {
       const family = await this.familyService.getUserFamily();
       if (!family?.name) {
@@ -142,10 +173,7 @@ export class AnalyticsPage implements OnInit {
         this.trendPolylinePoints = '';
         this.fetcherOptions = [];
         this.selectedFetcherUid = null;
-        this.scanLogs = [];
-        this.panicTotal30d = 0;
-        this.panicDaily30d = [];
-        this.panicMaxDaily30d = 0;
+        this.resetSafetyState();
         this.calculateProgress();
         return;
       }
@@ -203,13 +231,22 @@ export class AnalyticsPage implements OnInit {
       this.buildTrendSvg();
       this.calculateProgress();
 
+      // Ensure the role/access lookup (which may have been started in parallel
+      // by ionViewWillEnter) has settled before we gate on canViewSafetySections.
+      // Without this await, a slow access lookup could race past this check on
+      // the very first load and cause the safety section to be silently skipped.
+      if (this.accessReadyPromise) {
+        try {
+          await this.accessReadyPromise;
+        } catch {
+          /* refreshAccess swallows its own errors and falls back safely */
+        }
+      }
+
       if (this.canViewSafetySections) {
-        await this.refreshSafetyAnalytics(family.name);
+        await this.refreshSafetyAnalytics(family.name, memberNameByUid);
       } else {
-        this.scanLogs = [];
-        this.panicTotal30d = 0;
-        this.panicDaily30d = [];
-        this.panicMaxDaily30d = 0;
+        this.resetSafetyState();
       }
     } catch (e) {
       this.loadError = 'Could not load analytics. Try again.';
@@ -218,9 +255,12 @@ export class AnalyticsPage implements OnInit {
     }
   }
 
-  private async refreshSafetyAnalytics(familyName: string): Promise<void> {
-    this.scanLogsLoading = true;
-    this.scanLogsError = null;
+  private async refreshSafetyAnalytics(
+    familyName: string,
+    memberNameByUid: Map<string, string>
+  ): Promise<void> {
+    this.pickupHistoryLoading = true;
+    this.pickupHistoryError = null;
     try {
       const fetcherUid = this.selectedFetcherUid === null ? null : this.selectedFetcherUid;
       const fetcherLabel =
@@ -230,61 +270,189 @@ export class AnalyticsPage implements OnInit {
       const res = await this.analyticsSafety.loadSafetyAnalytics(familyName, {
         fetcherUid,
         fetcherLabel,
+        memberNameByUid,
       });
-      this.scanLogs = res.scanLogs;
-      this.scanLogsPage = 1;
-      this.panicTotal30d = res.panicTotal30d;
-      this.panicDaily30d = res.panicDaily30d;
-      this.panicMaxDaily30d = Math.max(1, ...res.panicDaily30d.map((d) => d.count));
+      this.pickupHistory = res.pickupHistory;
+      this.pickupHistoryPage = 1;
+      this.panicAlertMs = res.panicAlertMs;
+      this.panicSelectorBounds = res.panicSelectorBounds;
+      const b = res.panicSelectorBounds;
+      const fallback = this.parseYmKey(res.currentMonthValue);
+      const fy = fallback?.year ?? b.maxYear;
+      const fm = fallback?.month1 ?? b.maxMonthInMaxYear;
+      if (!this.isValidPanicSelection(this.selectedPanicYear, this.selectedPanicMonth, b)) {
+        this.selectedPanicYear = fy;
+        this.selectedPanicMonth = fm;
+      }
+      this.recomputePanicMonthBuckets();
     } catch (e) {
-      this.scanLogs = [];
-      this.scanLogsPage = 1;
-      this.panicTotal30d = 0;
-      this.panicDaily30d = [];
-      this.panicMaxDaily30d = 0;
-      this.scanLogsError = 'Could not load safety analytics. Try again.';
+      this.resetSafetyState();
+      this.pickupHistoryError = 'Could not load safety analytics. Try again.';
     } finally {
-      this.scanLogsLoading = false;
+      this.pickupHistoryLoading = false;
     }
   }
 
+  private resetSafetyState(): void {
+    this.pickupHistory = [];
+    this.pickupHistoryPage = 1;
+    this.panicAlertMs = [];
+    this.panicSelectorBounds = null;
+    this.selectedPanicYear = null;
+    this.selectedPanicMonth = null;
+    this.panicTotalMonth = 0;
+    this.panicDailyMonth = [];
+    this.panicMaxDailyMonth = 0;
+  }
+
+  /**
+   * ISO-8601 (without timezone) for the currently picked month, used by
+   * `ion-datetime` `[value]`. Ionic only cares about year + month here, but
+   * a full `YYYY-MM-DDTHH:mm:ss` payload keeps the parser happy.
+   */
+  get panicSelectedIso(): string {
+    if (this.selectedPanicYear == null || this.selectedPanicMonth == null) return '';
+    const mm = String(this.selectedPanicMonth).padStart(2, '0');
+    return `${this.selectedPanicYear}-${mm}-01T00:00:00`;
+  }
+
+  /** Lower bound for `ion-datetime [min]`: Jan 1 of the earliest selectable year. */
+  get panicMinIso(): string {
+    const b = this.panicSelectorBounds;
+    if (!b) return '';
+    return `${b.minYear}-01-01T00:00:00`;
+  }
+
+  /** Upper bound for `ion-datetime [max]`: end of the current local month. */
+  get panicMaxIso(): string {
+    const b = this.panicSelectorBounds;
+    if (!b) return '';
+    const mm = String(b.maxMonthInMaxYear).padStart(2, '0');
+    const lastDay = new Date(b.maxYear, b.maxMonthInMaxYear, 0).getDate();
+    const dd = String(lastDay).padStart(2, '0');
+    return `${b.maxYear}-${mm}-${dd}T23:59:59`;
+  }
+
+  onPanicDateChange(event: Event): void {
+    const detail = (event as CustomEvent).detail as
+      | { value?: string | string[] | null }
+      | undefined;
+    const raw = detail?.value;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (!value) return;
+    const m = String(value).match(/^(\d{4})-(\d{2})/);
+    if (!m) return;
+    const year = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    if (
+      Number.isNaN(year) ||
+      Number.isNaN(month) ||
+      !this.isValidPanicSelection(year, month, this.panicSelectorBounds)
+    ) {
+      return;
+    }
+    if (year === this.selectedPanicYear && month === this.selectedPanicMonth) return;
+    this.selectedPanicYear = year;
+    this.selectedPanicMonth = month;
+    this.recomputePanicMonthBuckets();
+  }
+
+  private isValidPanicSelection(
+    year: number | null,
+    month: number | null,
+    b: PanicSelectorBounds | null
+  ): boolean {
+    if (!b || year == null || month == null) return false;
+    if (year < b.minYear || year > b.maxYear) return false;
+    const maxM = year === b.maxYear ? b.maxMonthInMaxYear : 12;
+    return month >= 1 && month <= maxM;
+  }
+
+  private parseYmKey(ym: string): { year: number; month1: number } | null {
+    const parts = String(ym || '').split('-');
+    if (parts.length !== 2) return null;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (Number.isNaN(y) || Number.isNaN(m) || m < 1 || m > 12) return null;
+    return { year: y, month1: m };
+  }
+
+  private selectedPanicYmKey(): string | null {
+    if (this.selectedPanicYear == null || this.selectedPanicMonth == null) return null;
+    const mm = String(this.selectedPanicMonth).padStart(2, '0');
+    return `${this.selectedPanicYear}-${mm}`;
+  }
+
+  private recomputePanicMonthBuckets(): void {
+    const ym = this.selectedPanicYmKey();
+    if (!ym) {
+      this.panicTotalMonth = 0;
+      this.panicDailyMonth = [];
+      this.panicMaxDailyMonth = 0;
+      return;
+    }
+    const { dailyBuckets, total } = this.analyticsSafety.buildPanicMonthBuckets(
+      this.panicAlertMs,
+      ym
+    );
+    this.panicDailyMonth = dailyBuckets;
+    this.panicTotalMonth = total;
+    this.panicMaxDailyMonth = Math.max(1, ...dailyBuckets.map((d) => d.count));
+  }
+
+  get panicMonthHeading(): string {
+    if (this.selectedPanicYear == null || this.selectedPanicMonth == null) {
+      return 'Panic usage';
+    }
+    const d = new Date(this.selectedPanicYear, this.selectedPanicMonth - 1, 15);
+    const label = d.toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+    return `Panic usage (${label})`;
+  }
+
   panicBarHeightPct(count: number): number {
-    if (!this.panicMaxDaily30d) return 0;
-    return Math.round((count / this.panicMaxDaily30d) * 1000) / 10;
+    if (!this.panicMaxDailyMonth) return 0;
+    return Math.round((count / this.panicMaxDailyMonth) * 1000) / 10;
   }
 
-  visibleScanLogs(): SafetyScanLogRow[] {
-    const start = (this.scanLogsPage - 1) * this.scanLogsPageSize;
-    const end = start + this.scanLogsPageSize;
-    return this.scanLogs.slice(start, end);
+  pickupStatusClass(status: PickupHistoryRow['status']): string {
+    return `status-${status}`;
   }
 
-  scanLogsTotalPages(): number {
-    const n = this.scanLogs.length;
-    return n > 0 ? Math.ceil(n / this.scanLogsPageSize) : 1;
+  visiblePickupHistory(): PickupHistoryRow[] {
+    const start = (this.pickupHistoryPage - 1) * this.pickupHistoryPageSize;
+    const end = start + this.pickupHistoryPageSize;
+    return this.pickupHistory.slice(start, end);
   }
 
-  scanLogsPageLabel(): string {
-    if (!this.scanLogs.length) return '';
-    return `Page ${this.scanLogsPage} of ${this.scanLogsTotalPages()}`;
+  pickupHistoryTotalPages(): number {
+    const n = this.pickupHistory.length;
+    return n > 0 ? Math.ceil(n / this.pickupHistoryPageSize) : 1;
   }
 
-  canScanLogsPrev(): boolean {
-    return this.scanLogsPage > 1;
+  pickupHistoryPageLabel(): string {
+    if (!this.pickupHistory.length) return '';
+    return `Page ${this.pickupHistoryPage} of ${this.pickupHistoryTotalPages()}`;
   }
 
-  canScanLogsNext(): boolean {
-    return this.scanLogsPage < this.scanLogsTotalPages();
+  canPickupHistoryPrev(): boolean {
+    return this.pickupHistoryPage > 1;
   }
 
-  scanLogsPrevPage(): void {
-    if (!this.canScanLogsPrev()) return;
-    this.scanLogsPage -= 1;
+  canPickupHistoryNext(): boolean {
+    return this.pickupHistoryPage < this.pickupHistoryTotalPages();
   }
 
-  scanLogsNextPage(): void {
-    if (!this.canScanLogsNext()) return;
-    this.scanLogsPage += 1;
+  pickupHistoryPrevPage(): void {
+    if (!this.canPickupHistoryPrev()) return;
+    this.pickupHistoryPage -= 1;
+  }
+
+  pickupHistoryNextPage(): void {
+    if (!this.canPickupHistoryNext()) return;
+    this.pickupHistoryPage += 1;
   }
 
   private buildTrendSvg(): void {

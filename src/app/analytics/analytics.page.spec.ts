@@ -40,10 +40,16 @@ describe('AnalyticsPage', () => {
           provide: AnalyticsSafetyService,
           useValue: {
             loadSafetyAnalytics: async () => ({
-              scanLogs: [],
-              panicTotal30d: 0,
-              panicDaily30d: [],
+              pickupHistory: [],
+              panicAlertMs: [],
+              panicSelectorBounds: {
+                minYear: 2025,
+                maxYear: 2026,
+                maxMonthInMaxYear: 5,
+              },
+              currentMonthValue: '2026-05',
             }),
+            buildPanicMonthBuckets: () => ({ dailyBuckets: [], total: 0 }),
           },
         },
         {

@@ -56,7 +56,40 @@
       </div>
 
       <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID && scheduleData.selectedDays.length > 0">
-        <label class="input-label">3. Pick a date</label>
+        <label class="input-label">3. Repeat</label>
+        <div class="repeat-mode-row" role="radiogroup" aria-label="Repeat schedule">
+          <button
+            type="button"
+            class="repeat-mode-btn"
+            [class.selected]="isRepeatMode('single')"
+            (click)="setRepeatMode('single')"
+            [attr.aria-pressed]="isRepeatMode('single')">
+            <ion-icon name="calendar-clear-outline" aria-hidden="true"></ion-icon>
+            <span class="repeat-mode-title">Just this date</span>
+            <span class="repeat-mode-sub">One pickup week</span>
+          </button>
+          <button
+            type="button"
+            class="repeat-mode-btn"
+            [class.selected]="isRepeatMode('whole_month')"
+            (click)="setRepeatMode('whole_month')"
+            [attr.aria-pressed]="isRepeatMode('whole_month')">
+            <ion-icon name="calendar-outline" aria-hidden="true"></ion-icon>
+            <span class="repeat-mode-title">Whole month</span>
+            <span class="repeat-mode-sub">Through end of month</span>
+          </button>
+        </div>
+        <ion-note color="medium" class="step-hint">
+          <span *ngIf="isRepeatMode('single')">Saves the picked weekdays for the chosen week only.</span>
+          <span *ngIf="isRepeatMode('whole_month')">Saves every selected weekday from the chosen date through the end of that month.</span>
+        </ion-note>
+      </div>
+
+      <!-- Step 4 (single mode): tap a specific date; calendar tints the week. -->
+      <div
+        class="input-group"
+        *ngIf="canManageSchedule && scheduleData.fetcherUID && scheduleData.selectedDays.length > 0 && isRepeatMode('single')">
+        <label class="input-label">4. Pick a start date</label>
         <div class="date-info">
           <ion-chip color="primary" class="info-chip">
             <ion-icon name="information-circle"></ion-icon>
@@ -81,6 +114,97 @@
             </ion-datetime>
           </ng-container>
         </div>
+      </div>
+
+      <!-- Step 4 (whole month mode): pick a month-year only; show the actual dates that will be saved. -->
+      <div
+        class="input-group"
+        *ngIf="canManageSchedule && scheduleData.fetcherUID && scheduleData.selectedDays.length > 0 && isRepeatMode('whole_month')">
+        <label class="input-label">4. Pick a month</label>
+        <div class="date-info">
+          <ion-chip color="primary" class="info-chip">
+            <ion-icon name="information-circle"></ion-icon>
+            <ion-label>Pick the month — every selected weekday in that month becomes a pickup.</ion-label>
+          </ion-chip>
+        </div>
+        <div class="datetime-mount month-trigger-row">
+          <ion-datetime-button
+            class="month-year-trigger"
+            datetime="schedulingMonthPicker"
+            aria-label="Choose month for the schedule">
+          </ion-datetime-button>
+
+          <ion-modal class="scheduling-month-modal" [keepContentsMounted]="true">
+            <ng-template>
+              <ion-datetime
+                id="schedulingMonthPicker"
+                presentation="month-year"
+                [min]="wholeMonthMinIso"
+                [max]="wholeMonthMaxIso"
+                [value]="wholeMonthValueIso"
+                (ionChange)="onWholeMonthPicked($event)"
+                showDefaultButtons="false">
+              </ion-datetime>
+            </ng-template>
+          </ion-modal>
+        </div>
+
+        <!-- Inline calendar that visually highlights every scheduled day in the chosen month. -->
+        <div class="datetime-mount month-calendar-mount" *ngIf="scheduleData.selectedDate">
+          <ng-container *ngFor="let shell of calendarShells; trackBy: trackCalendarShell">
+            <ion-datetime
+              presentation="date"
+              [min]="minDate"
+              [max]="maxDate"
+              [isDateEnabled]="isDateEnabled"
+              [highlightedDates]="highlightWholeMonthMatchingDays"
+              [value]="selectedDateIonValue"
+              (ionChange)="onDateChange($event)"
+              showDefaultButtons="false"
+              class="custom-datetime month-inline-datetime">
+            </ion-datetime>
+          </ng-container>
+        </div>
+
+        <ion-note color="medium" class="step-hint skip-hint" *ngIf="scheduleData.selectedDate">
+          Tip: tap any tinted day above to skip it (e.g. skip the last Monday of the month). Tap again to bring it back.
+        </ion-note>
+
+        <div class="dates-summary" *ngIf="getWholeMonthDatesSummary()">
+          <ion-chip class="summary-chip">
+            <ion-icon name="list-outline" aria-hidden="true"></ion-icon>
+            <ion-label>{{ getWholeMonthDatesSummary() }}</ion-label>
+          </ion-chip>
+        </div>
+
+        <div class="dates-summary skipped-summary" *ngIf="getWholeMonthExcludedCount() > 0">
+          <ion-chip class="summary-chip skipped-chip">
+            <ion-icon name="close-circle-outline" aria-hidden="true"></ion-icon>
+            <ion-label>{{ getWholeMonthExcludedSummary() }}</ion-label>
+          </ion-chip>
+          <ion-button
+            type="button"
+            fill="clear"
+            size="small"
+            class="reset-skips-btn"
+            (click)="resetWholeMonthExclusions()">
+            <ion-icon slot="start" name="refresh-outline" aria-hidden="true"></ion-icon>
+            Reset skipped days
+          </ion-button>
+        </div>
+
+        <ion-note color="medium" class="step-hint" *ngIf="getWholeMonthEmptyHint()">
+          {{ getWholeMonthEmptyHint() }}
+        </ion-note>
+      </div>
+
+      <div
+        class="repeat-preview"
+        *ngIf="canManageSchedule && scheduleData.fetcherUID && scheduleData.selectedDays.length > 0 && scheduleData.selectedDate && getRepeatPreview()">
+        <ion-chip color="primary" class="info-chip">
+          <ion-icon name="checkmark-done-outline"></ion-icon>
+          <ion-label>{{ getRepeatPreview() }}</ion-label>
+        </ion-chip>
       </div>
 
       <div class="input-group" *ngIf="canManageSchedule && scheduleData.fetcherUID">

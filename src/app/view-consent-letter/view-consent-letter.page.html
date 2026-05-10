@@ -12,7 +12,6 @@
     <div *ngIf="!isLoading && consentLetters.length === 0" class="empty-state">
       <ion-icon name="document-text-outline" class="empty-icon"></ion-icon>
       <h3>No Consent Letters</h3>
-      <p>You haven't created any consent letters yet.</p>
     </div>
 
     <div *ngIf="!isLoading && consentLetters.length > 1" class="letters-list">
@@ -22,7 +21,10 @@
            [class.selected]="selectedLetter?.id === letter.id"
            (click)="selectLetter(letter)">
         <div class="letter-preview">
-          <p class="letter-text">{{ letter.letter | slice:0:50 }}...</p>
+          <p class="letter-text">
+            <strong>{{ letter.childName || 'Child' }}</strong>
+            <span *ngIf="letter.consentDate"> · {{ formatConsentDate(letter.consentDate) }}</span>
+          </p>
           <span class="letter-date">{{ letter.dateIssued?.toDate() | date:'MMM dd, yyyy' }}</span>
         </div>
       </div>
@@ -70,6 +72,21 @@
         <div class="validity-item">
           <span class="validity-label">Date Issued</span>
           <span class="validity-value">{{ selectedLetter.dateIssued?.toDate() | date:'MMM dd, yyyy' }}</span>
+        </div>
+
+        <div class="validity-item" *ngIf="selectedLetter.consentDate">
+          <span class="validity-label">For Date</span>
+          <span class="validity-value">{{ formatConsentDate(selectedLetter.consentDate) }}</span>
+        </div>
+
+        <div class="validity-item" *ngIf="selectedLetter.childName">
+          <span class="validity-label">Child</span>
+          <span class="validity-value">{{ selectedLetter.childName }}</span>
+        </div>
+
+        <div class="validity-item" *ngIf="selectedLetter.parentName">
+          <span class="validity-label">Authorized By</span>
+          <span class="validity-value">{{ selectedLetter.parentName }}</span>
         </div>
 
         <div class="validity-item">

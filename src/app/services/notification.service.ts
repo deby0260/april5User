@@ -12,6 +12,9 @@ import {
   updateDoc,
   getDoc,
   deleteField,
+  query,
+  where,
+  getDocs,
 } from '@angular/fire/firestore';
 import { environment } from '../../environments/environment';
 
@@ -48,6 +51,16 @@ export class NotificationService {
 
   private static readonly SETTINGS_STORAGE_KEY = 'fetchsafe-settings';
   private static readonly PICKUP_REMINDER_KEYS_STORAGE = 'fetchsafe-pickup-reminder-keys-v1';
+  private static readonly PICKUP_REMINDER_LAST_SYNC_MS = 'fetchsafe-pickup-reminder-last-sync-ms';
+  /** Throttled background syncs (e.g. silent view-schedule polls); login / explicit `force` bypass. */
+  private static readonly PICKUP_REMINDER_SYNC_MIN_INTERVAL_MS = 2 * 60 * 1000;
+  /**
+   * Foreground timers keyed by `reminderKey`. Used so the in-app inbox
+   * reminder fires at exactly T-30 on web (and as a redundancy net on
+   * native). In-memory only — page reloads will re-establish them via
+   * {@link syncPendingPickupReminders30mForCurrentUser}.
+   */
+  private inAppReminderTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private platform: Platform,
@@ -359,6 +372,121 @@ export class NotificationService {
   }
 
   /**
+   * Loads every pending schedule where this device’s signed-in user is the fetcher
+   * and registers the 30-minute-before local notification for each (idempotent).
+   * Call after login, from Home, or from View Schedule so reminders work without
+   * opening the schedule list first. When `force` is false, skips if last sync
+   * was within {@link NotificationService.PICKUP_REMINDER_SYNC_MIN_INTERVAL_MS}
+   * to limit Firestore reads during background refreshes.
+   */
+  async syncPendingPickupReminders30mForCurrentUser(opts?: { force?: boolean }): Promise<void> {
+    if (!this.readAppNotificationsEnabled()) {
+      return;
+    }
+    // No native bail-out: schedulePickupReminder30m now handles BOTH the
+    // device-level alarm (native only) AND the in-app inbox write (every
+    // platform), so this method must run on web too.
+    const user = this.authService.getCurrentUser();
+    if (!user?.uid) {
+      return;
+    }
+
+    const force = opts?.force === true;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(NotificationService.PICKUP_REMINDER_LAST_SYNC_MS);
+        const last = raw ? parseInt(raw, 10) : 0;
+        if (last && Date.now() - last < NotificationService.PICKUP_REMINDER_SYNC_MIN_INTERVAL_MS) {
+          return;
+        }
+      } catch {
+        /* noop */
+      }
+    }
+
+    try {
+      const schedulesCollection = collection(this.firestore, 'Schedules');
+      const q = query(schedulesCollection, where('Fetcher UID', '==', user.uid));
+      const snap = await getDocs(q);
+      const todayYmd = this.todayLocalYmd();
+
+      for (const d of snap.docs) {
+        const data = d.data() as Record<string, unknown>;
+        const status = String(data['Status'] ?? 'pending');
+        if (status !== 'pending') {
+          continue;
+        }
+        const dateYmd = this.scheduleDateFieldToYmd(data['Date']);
+        if (!dateYmd || dateYmd < todayYmd) {
+          continue;
+        }
+        const time = String(data['Time'] ?? '').trim();
+        const childName = String(data['Childs Name'] ?? '').trim();
+        const familyName = String(data['Family Name'] ?? '').trim();
+        if (!time || !childName || !familyName) {
+          continue;
+        }
+        await this.schedulePickupReminder30m({
+          scheduleId: d.id,
+          familyName,
+          childName,
+          scheduleDateYmd: dateYmd,
+          scheduleTime: time,
+        });
+      }
+
+      try {
+        localStorage.setItem(NotificationService.PICKUP_REMINDER_LAST_SYNC_MS, String(Date.now()));
+      } catch {
+        /* noop */
+      }
+    } catch {
+      /* noop */
+    }
+  }
+
+  private todayLocalYmd(): string {
+    const now = new Date();
+    const y = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+  }
+
+  /** Normalise Firestore `Date` (string or Timestamp) to local calendar YYYY-MM-DD. */
+  private scheduleDateFieldToYmd(val: unknown): string {
+    if (val == null) {
+      return '';
+    }
+    if (typeof val === 'string') {
+      const parts = val.split('-').map((n) => parseInt(n, 10));
+      if (parts.length === 3 && !parts.some((n) => Number.isNaN(n))) {
+        const [y, m, d] = parts;
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+      const parsed = new Date(val);
+      if (!Number.isNaN(parsed.getTime())) {
+        const y = parsed.getFullYear();
+        const mo = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${day}`;
+      }
+      return '';
+    }
+    if (typeof val === 'object' && val !== null && typeof (val as { toDate?: () => Date }).toDate === 'function') {
+      const d = (val as { toDate: () => Date }).toDate();
+      if (!d || Number.isNaN(d.getTime())) {
+        return '';
+      }
+      const y = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${mo}-${day}`;
+    }
+    return '';
+  }
+
+  /**
    * Schedules a local reminder for the currently signed-in user (typically the assigned fetcher/companion)
    * and ensures the reminder shows up inside the in-app Notifications feed at delivery time.
    *
@@ -377,21 +505,59 @@ export class NotificationService {
       if (!this.readAppNotificationsEnabled()) {
         return;
       }
-      if (!Capacitor.isNativePlatform()) {
-        return;
-      }
+      const pickupAt = this.computeReminderAtLocal(input.scheduleDateYmd, input.scheduleTime, 0);
       const reminderAt = this.computeReminderAtLocal(input.scheduleDateYmd, input.scheduleTime, 30);
-      if (!reminderAt) {
+      if (!pickupAt || !reminderAt) {
         return;
       }
       const now = Date.now();
-      if (reminderAt.getTime() <= now + 5_000) {
-        // Too late / immediate; skip rather than spamming on open.
+      // Pickup already started or ended — nothing to remind.
+      if (pickupAt.getTime() <= now) {
         return;
       }
 
       const reminderKey = `pickupReminder30m:${input.scheduleId}:${reminderAt.toISOString()}`;
+      const extra: PickupReminderExtra = {
+        kind: 'pickup_reminder_30m',
+        reminderKey,
+        scheduleId: input.scheduleId,
+        scheduleDate: input.scheduleDateYmd,
+        scheduleTime: input.scheduleTime,
+        familyName: input.familyName,
+        childName: input.childName,
+      };
+
+      // 1) In-app inbox: works on every platform (web + native). If the
+      //    30-min mark has already passed we write right away; otherwise we
+      //    set a foreground timer to write at exactly T-30. The Firestore
+      //    doc id is deterministic so re-runs are idempotent.
+      this.ensureInAppPickupReminder(reminderKey, extra, reminderAt, pickupAt);
+
+      // 2) Device-level OS alarm: native-only. Even if the user kills the
+      //    web tab, the OS will still wake the app and surface the reminder.
+      if (!Capacitor.isNativePlatform()) {
+        return;
+      }
       if (this.hasScheduledPickupReminderKey(reminderKey)) {
+        return;
+      }
+
+      /**
+       * Never skip just because we're "close" to T-30: the old `reminderAt <= now + 5s`
+       * guard incorrectly dropped every schedule when sync ran within ~5s *before*
+       * the alarm (e.g. 6:59:57 for a 7:00 reminder). If we're past T-30 but before
+       * pickup, schedule a near-immediate local notification so the user still gets
+       * the alert + in-app feed via `localNotificationReceived`.
+       */
+      const soon = new Date(now + 2_000);
+      let scheduleAt = reminderAt;
+      if (scheduleAt.getTime() <= now + 15_000) {
+        scheduleAt = soon;
+      }
+      if (scheduleAt.getTime() >= pickupAt.getTime()) {
+        scheduleAt = new Date(Math.max(now + 2_000, pickupAt.getTime() - 60_000));
+      }
+      if (scheduleAt.getTime() >= pickupAt.getTime()) {
         return;
       }
 
@@ -402,23 +568,78 @@ export class NotificationService {
         title,
         body,
         id: this.localNotificationIdFromKey(reminderKey),
-        schedule: { at: reminderAt },
+        schedule: { at: scheduleAt },
         actionTypeId: 'schedule',
-        extra: {
-          kind: 'pickup_reminder_30m',
-          reminderKey,
-          scheduleId: input.scheduleId,
-          scheduleDate: input.scheduleDateYmd,
-          scheduleTime: input.scheduleTime,
-          familyName: input.familyName,
-          childName: input.childName,
-        } satisfies PickupReminderExtra,
+        extra,
       };
 
       await LocalNotifications.schedule({ notifications: [notification] });
       this.rememberScheduledPickupReminderKey(reminderKey);
     } catch {
       // Intentionally silent.
+    }
+  }
+
+  /**
+   * Ensures the 30-minute pickup reminder appears in the in-app Notifications
+   * inbox — works on every platform, no Capacitor required. If the reminder
+   * time has already passed (and pickup is still upcoming) we write to
+   * Firestore immediately; otherwise we hold a foreground timer that writes
+   * at exactly T-30. The write is idempotent (deterministic doc id), and we
+   * dedupe in-flight timers per `reminderKey` so repeated sync runs don't
+   * stack timeouts in memory.
+   */
+  private ensureInAppPickupReminder(
+    reminderKey: string,
+    extra: PickupReminderExtra,
+    reminderAt: Date,
+    pickupAt: Date,
+  ): void {
+    try {
+      const now = Date.now();
+      const reminderTs = reminderAt.getTime();
+
+      // Past reminder time but pickup still ahead → catch-up write so the
+      // user immediately sees an inbox entry on app open.
+      if (reminderTs <= now + 1_000) {
+        void this.writePickupReminderToInAppNotifications(extra);
+        return;
+      }
+
+      // Future reminder. Skip if a live timer is already pending for this key
+      // in this session — protects against duplicate setTimeouts when sync
+      // is invoked from multiple entry points (login, home, scheduling save).
+      if (this.inAppReminderTimers.has(reminderKey)) {
+        return;
+      }
+
+      // Snapshot the user so a logout / account switch before the timer
+      // fires doesn't write the reminder against the wrong recipient.
+      const ownerUid = this.authService.getCurrentUser()?.uid;
+      if (!ownerUid) {
+        return;
+      }
+
+      // Cap the wait so very-long-horizon schedules don't park a 24h+
+      // timeout that the engine may collapse to 0; shorter timers will be
+      // re-scheduled on the next sync (login / home enter).
+      const delayMs = Math.min(reminderTs - now, 24 * 60 * 60 * 1000);
+      const timerId = setTimeout(() => {
+        this.inAppReminderTimers.delete(reminderKey);
+        void (async () => {
+          try {
+            if (Date.now() >= pickupAt.getTime()) return;
+            const cur = this.authService.getCurrentUser();
+            if (!cur?.uid || cur.uid !== ownerUid) return;
+            await this.writePickupReminderToInAppNotifications(extra);
+          } catch {
+            // noop
+          }
+        })();
+      }, delayMs);
+      this.inAppReminderTimers.set(reminderKey, timerId);
+    } catch {
+      // noop
     }
   }
 
@@ -483,8 +704,14 @@ export class NotificationService {
   }
 
   private parseClockToMinutes(timeStr: string): number | null {
-    const t = String(timeStr || '').trim();
+    let t = String(timeStr || '').trim();
     if (!t) return null;
+    // `ion-input type="time"` / some locales can emit fractional seconds ("19:30:00.000"),
+    // which used to make this parser return null and skip all reminders silently.
+    const dot = t.indexOf('.');
+    if (dot !== -1) {
+      t = t.slice(0, dot);
+    }
     const ampm = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)$/);
     if (ampm) {
       let h = parseInt(ampm[1], 10);
@@ -505,20 +732,47 @@ export class NotificationService {
     return null;
   }
 
+  /**
+   * Render any reasonable clock string as a single, unambiguous "h:mm AM/PM".
+   *
+   * Defensive against:
+   *   - 24h `HH:mm`, `HH:mm:ss`, `HH:mm:ss.SSS` from `<ion-input type="time">`
+   *   - 12h "h:mm AM" / "h:mm pm" with mixed casing or missing space
+   *   - Malformed legacy data with TWO meridiem markers ("8:30 AM PM"),
+   *     which previously surfaced verbatim. The LAST marker now wins.
+   *   - Empty / unparseable input → empty string (safer than echoing junk).
+   */
   private formatClockTo12h(timeStr: string): string {
-    const t = String(timeStr || '').trim();
+    let t = String(timeStr || '').trim();
     if (!t) return '';
-    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-    if (m) {
-      const h24 = parseInt(m[1], 10);
-      const min = m[2];
-      if (Number.isNaN(h24)) return t;
-      const ampm = h24 >= 12 ? 'PM' : 'AM';
-      const h12 = h24 % 12 || 12;
-      return `${h12}:${min} ${ampm}`;
+    const dot = t.indexOf('.');
+    if (dot !== -1) {
+      t = t.slice(0, dot);
     }
-    // Already in AM/PM
-    return t;
+    const upper = t.toUpperCase();
+    const lastAm = upper.lastIndexOf('AM');
+    const lastPm = upper.lastIndexOf('PM');
+    let isPm: boolean | null = null;
+    if (lastAm !== -1 || lastPm !== -1) {
+      isPm = lastPm > lastAm;
+    }
+    const numeric = upper.replace(/AM|PM/g, '').trim();
+    const m = numeric.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (!m) return t;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (Number.isNaN(h) || Number.isNaN(min)) return t;
+
+    if (isPm === null) {
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${h12}:${String(min).padStart(2, '0')} ${ampm}`;
+    }
+    if (isPm && h !== 12) h += 12;
+    if (!isPm && h === 12) h = 0;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(min).padStart(2, '0')} ${ampm}`;
   }
 
   private async writePickupReminderToInAppNotifications(extra: PickupReminderExtra): Promise<void> {

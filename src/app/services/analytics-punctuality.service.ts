@@ -371,13 +371,21 @@ export class AnalyticsPunctualityService {
     dayBuckets: Map<string, { onTime: number; late: number; missed: number }>,
     todayYmd: string
   ): WeekBarDay[] {
+    // Anchor on the most recent Sunday (could be today) and emit 7 bars
+    // Sunday → Saturday for the current calendar week. Days that haven't
+    // happened yet in this week simply render as empty bars; days from
+    // earlier in the week pull their counts out of `dayBuckets`.
+    const today = this.parseYmdLocal(todayYmd);
+    if (!today) return [];
+    const sunday = new Date(today);
+    sunday.setDate(sunday.getDate() - sunday.getDay()); // getDay(): 0 = Sunday
+
     const bars: WeekBarDay[] = [];
-    for (let i = this.weekBarDays - 1; i >= 0; i--) {
-      const ymd = this.addDaysYmd(todayYmd, -i);
-      const d = this.parseYmdLocal(ymd);
-      const label = d
-        ? d.toLocaleDateString(undefined, { weekday: 'short' })
-        : '';
+    for (let i = 0; i < this.weekBarDays; i++) {
+      const day = new Date(sunday);
+      day.setDate(sunday.getDate() + i);
+      const ymd = this.ymdLocal(day);
+      const label = day.toLocaleDateString(undefined, { weekday: 'short' });
       const b = dayBuckets.get(ymd) ?? { onTime: 0, late: 0, missed: 0 };
       const maxStack = Math.max(b.onTime + b.late + b.missed, 1);
       bars.push({

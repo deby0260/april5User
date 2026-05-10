@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, query, where, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, deleteDoc, writeBatch } from '@angular/fire/firestore';
+import { Firestore, collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, addDoc, serverTimestamp, deleteDoc, writeBatch } from '@angular/fire/firestore';
 import { AuthService } from './auth';
 import { BehaviorSubject } from 'rxjs';
 
@@ -427,20 +427,30 @@ export class FamilyService {
         }
       });
 
-      
-      const registeredCollection = collection(this.firestore, 'Registerd');
+      // Resolve every member UID against `Registerd` AND fetch the joined-users
+      // index in a single parallel batch instead of N+1 sequential queries.
+      // `Registerd` doc IDs equal the user UID (see auth.registerUser), so we
+      // can use getDoc(doc(...)) directly — far cheaper than where('uid','==')
+      // queries and parallelizable via Promise.all.
+      const registeredUsersCollection = collection(this.firestore, 'Registerd');
+      const joinedUsersQuery = query(registeredUsersCollection, where('familyName', '==', familyName));
+      const [memberSnaps, joinedUsersSnapshot] = await Promise.all([
+        Promise.all(
+          uniqueUIDs.map((uid) =>
+            getDoc(doc(this.firestore, 'Registerd', uid)).catch(() => null)
+          )
+        ),
+        getDocs(joinedUsersQuery),
+      ]);
 
-      for (const uid of uniqueUIDs) {
+      for (let i = 0; i < uniqueUIDs.length; i++) {
+        const uid = uniqueUIDs[i];
+        const snap = memberSnaps[i];
         try {
-          const userQuery = query(registeredCollection, where('uid', '==', uid));
-          const userSnapshot = await getDocs(userQuery);
-
-          if (!userSnapshot.empty) {
-            const userData = userSnapshot.docs[0].data();
-
+          if (snap && snap.exists()) {
+            const userData = snap.data() as any;
 
             let memberRole: 'owner' | 'parent' | 'companion' = 'companion';
-
 
             const userFullName = userData['fullName'] || userData['email'] || '';
             if (originalCreatorName && userFullName === originalCreatorName) {
@@ -509,16 +519,11 @@ export class FamilyService {
                 joinedDate: familyData['Date Created'] || new Date(),
                 uid: uid
               });
-            } else {
             }
           }
         } catch (userError) {
         }
       }
-
-      const registeredUsersCollection = collection(this.firestore, 'Registerd');
-      const joinedUsersQuery = query(registeredUsersCollection, where('familyName', '==', familyName));
-      const joinedUsersSnapshot = await getDocs(joinedUsersQuery);
 
       joinedUsersSnapshot.docs.forEach(doc => {
         const userData = doc.data();

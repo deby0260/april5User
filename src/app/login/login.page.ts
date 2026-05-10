@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { AuthService } from '../services/auth';
 import { LoadingController, AlertController, ToastController } from '@ionic/angular';
+import { NotificationService } from '../services/notification.service';
 
 @Component({
   selector: 'app-login',
@@ -24,7 +25,8 @@ export class LoginPage implements OnInit {
     private authService: AuthService,
     private loadingController: LoadingController,
     private alertController: AlertController,
-    private toastController: ToastController
+    private toastController: ToastController,
+    private notificationService: NotificationService
   ) { }
 
   ngOnInit() {
@@ -56,6 +58,7 @@ export class LoginPage implements OnInit {
 
         await this.showToast('Login successful!', 'success');
 
+        void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: true });
 
         this.router.navigate(['/home']);
       } else {

@@ -85,6 +85,7 @@ export class HomePage implements OnInit {
   /** Reload pickups whenever Home is shown (tabs keep the page alive; avoids stale cards after edits). */
   async ionViewWillEnter() {
     await this.loadUpcomingPickups();
+    void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: false });
   }
 
   private toLocalYmd(dateStr: string): string {

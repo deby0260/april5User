@@ -17,7 +17,12 @@
               <div class="notification-header">
                 <ion-icon name="close" class="close-icon" (click)="dismissNotification(notification, $event)"></ion-icon>
               </div>
-              <h4>{{ notification.title }}</h4>
+              <h4 class="notification-title">
+                <ng-container *ngFor="let part of notification.titleParts">
+                  <strong *ngIf="part.bold">{{ part.text }}</strong>
+                  <ng-container *ngIf="!part.bold">{{ part.text }}</ng-container>
+                </ng-container>
+              </h4>
               <p>{{ notification.subtitle }}</p>
             </div>
           </div>

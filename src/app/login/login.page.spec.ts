@@ -25,6 +25,7 @@ describe('LoginPage', () => {
       imports: [IonicModule.forRoot()],
       providers: [
         { provide: AuthService, useValue: authServiceSpy },
+        { provide: NotificationService, useValue: jasmine.createSpyObj('NotificationService', ['syncPendingPickupReminders30mForCurrentUser']) },
         { provide: LoadingController, useValue: loadingControllerSpy },
         { provide: AlertController, useValue: alertControllerSpy },
         { provide: ToastController, useValue: toastControllerSpy },

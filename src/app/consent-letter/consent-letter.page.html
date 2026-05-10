@@ -2,19 +2,82 @@
   <div class="page-container">
     <div class="title-section">
       <h1>Consent Letter</h1>
+      <p class="subtitle">Authorize a family member to pick up your child on a specific date.</p>
     </div>
 
     <div class="form-section">
-      <div class="input-group">
-        <label class="input-label">Letter</label>
-        <ion-textarea
-          placeholder="I hereby authorize [Child's Name] to pick up my child [Child's Name] today."
-          [(ngModel)]="consentData.letter"
-          rows="6"
-          class="letter-textarea">
-        </ion-textarea>
+      <!-- Sentence builder. Each segment of the canonical letter is either fixed
+           text or a chip-style selector, so the user can read the final wording
+           inline as they choose. -->
+      <div class="sentence-builder">
+        <span class="sentence-fixed">I hereby authorize</span>
+
+        <div class="sentence-control">
+          <ion-select
+            interface="popover"
+            placeholder="Select companion"
+            class="inline-select"
+            [value]="consentData.authorizedFetcherUid"
+            (ionChange)="onFetcherSelected($event)">
+            <ion-select-option *ngFor="let m of availableFetchers" [value]="m.uid">
+              {{ m.name }}
+            </ion-select-option>
+          </ion-select>
+          <ion-note color="medium" class="empty-hint" *ngIf="availableFetchers.length === 0">
+            No other family members are available to authorize. Add a companion or parent first.
+          </ion-note>
+        </div>
+
+        <span class="sentence-fixed">to pick up my child</span>
+
+        <div class="sentence-control">
+          <ion-select
+            interface="popover"
+            placeholder="Select child"
+            class="inline-select"
+            [value]="consentData.childName"
+            (ionChange)="onChildSelected($event)">
+            <ion-select-option *ngFor="let c of children" [value]="c?.name">
+              {{ c?.name }}
+            </ion-select-option>
+          </ion-select>
+          <ion-note color="medium" class="empty-hint" *ngIf="children.length === 0">
+            No children registered for this family yet.
+          </ion-note>
+        </div>
+
+        <span class="sentence-fixed">on</span>
+
+        <div class="sentence-control">
+          <ion-datetime-button
+            class="inline-date-btn"
+            datetime="consentDatePicker"
+            aria-label="Date this consent letter applies to">
+          </ion-datetime-button>
+
+          <ion-modal class="consent-date-modal" [keepContentsMounted]="true">
+            <ng-template>
+              <ion-datetime
+                id="consentDatePicker"
+                presentation="date"
+                [min]="minConsentDate"
+                [max]="maxConsentDate"
+                [value]="consentDateIonValue"
+                (ionChange)="onConsentDateChange($event)"
+                showDefaultButtons="true">
+              </ion-datetime>
+            </ng-template>
+          </ion-modal>
+        </div>
+
+        <span class="sentence-fixed sentence-period">.</span>
       </div>
 
+      <!-- Live preview of exactly what gets saved to Firestore. -->
+      <div class="letter-preview">
+        <label class="input-label">Letter preview</label>
+        <p class="preview-text">{{ consentData.letter }}</p>
+      </div>
 
       <div class="input-group">
         <label class="input-label">Parent/Guardian Signature</label>
@@ -38,37 +101,20 @@
         </div>
       </div>
 
-
-      <div class="toggle-section">
-        <div class="toggle-item">
-          <span class="toggle-label">Emergency Fetcher</span>
-          <ion-toggle
-            [(ngModel)]="consentData.emergencyFetcher"
-            class="custom-toggle">
-          </ion-toggle>
-        </div>
-
-        <div class="toggle-item">
-          <span class="toggle-label">One time Fetcher</span>
-          <ion-toggle
-            [(ngModel)]="consentData.oneTimeFetcher"
-            class="custom-toggle">
-          </ion-toggle>
-        </div>
-      </div>
-
-
       <div class="date-info-section">
         <div class="date-item">
           <span class="date-label">Date Issued:</span>
           <span class="date-value">{{ consentData.dateIssued | date:'MMM dd, yyyy' }}</span>
         </div>
         <div class="date-item">
-          <span class="date-label">Valid Until:</span>
-          <span class="date-value">{{ consentData.validUntil }}</span>
+          <span class="date-label">Authorized Fetcher:</span>
+          <span class="date-value">{{ consentData.authorizedFetcherName || '—' }}</span>
+        </div>
+        <div class="date-item">
+          <span class="date-label">For Date:</span>
+          <span class="date-value">{{ formatConsentDateLabel() }}</span>
         </div>
       </div>
-
 
       <div class="action-section">
         <ion-button

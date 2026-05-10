@@ -81,9 +81,20 @@
 
         h4 {
           font-size: 16px;
-          font-weight: bold;
+          // Only the names inside the title render bold via <strong>.
+          // Keeping the wrapper at normal weight makes connective copy
+          // ("was picked up by", "has arrived at the school at …") read
+          // as a regular sentence — names visually pop without the whole
+          // line shouting at the user.
+          font-weight: 400;
           color: #333;
           margin: 0 0 4px 0;
+          line-height: 1.4;
+
+          strong {
+            font-weight: 700;
+            color: #1a1a1a;
+          }
         }
 
         p {

@@ -3,7 +3,6 @@ import { Location } from '@angular/common';
 import { Firestore, collection, query, where, getDocs } from '@angular/fire/firestore';
 import { AuthService } from '../services/auth';
 import { FamilyService } from '../services/family.service';
-import { LoadingController } from '@ionic/angular';
 
 interface ConsentLetterData {
   letter: string;
@@ -15,6 +14,12 @@ interface ConsentLetterData {
   parentName: string;
   familyName: string;
   uid: string;
+  /** Set by the new consent-letter form. Drives access control. */
+  authorizedFetcherUid: string;
+  authorizedFetcherName: string;
+  childName: string;
+  /** YYYY-MM-DD this consent applies to. */
+  consentDate: string;
   id?: string;
 }
 
@@ -27,6 +32,12 @@ interface ConsentLetterData {
 export class ViewConsentLetterPage implements OnInit {
   consentLetters: ConsentLetterData[] = [];
   selectedLetter: ConsentLetterData | null = null;
+  /**
+   * Drives the in-page loading section in the template. The previous
+   * implementation also opened a separate `LoadingController` modal, which
+   * stacked a second spinner on top of the page-level one — that has been
+   * removed; only this flag remains.
+   */
   isLoading = false;
 
   constructor(
@@ -34,151 +45,114 @@ export class ViewConsentLetterPage implements OnInit {
     private firestore: Firestore,
     private authService: AuthService,
     private familyService: FamilyService,
-    private loadingController: LoadingController
   ) { }
 
   ngOnInit() {
-    this.loadConsentLetters();
+    void this.loadConsentLetters();
   }
 
-  async loadConsentLetters() {
-    const loading = await this.loadingController.create({
-      message: 'Loading family consent letters...'
-    });
-    await loading.present();
-
+  /**
+   * Loads ONLY consent letters where the current user is the authorized
+   * fetcher (`authorizedFetcherUid === currentUser.uid`). Letters created
+   * before this field existed are intentionally hidden because we have no
+   * way to verify they were meant for this user.
+   */
+  async loadConsentLetters(): Promise<void> {
+    this.isLoading = true;
     try {
-      this.isLoading = true;
       const currentUser = this.authService.getCurrentUser();
-
-      if (!currentUser) {
-        await loading.dismiss();
+      if (!currentUser?.uid) {
+        this.consentLetters = [];
+        this.selectedLetter = null;
         return;
       }
+
+      // The viewer is fetcher-scoped. We query Firestore directly by
+      // `authorizedFetcherUid` so other family members never even read
+      // these docs (and unrelated reads stay light on quota).
+      const consentCollection = collection(this.firestore, 'Consent Letters');
+      const myLettersQuery = query(
+        consentCollection,
+        where('authorizedFetcherUid', '==', currentUser.uid),
+      );
+      const snap = await getDocs(myLettersQuery);
 
       const family = await this.familyService.getUserFamily();
-      if (!family) {
-        await loading.dismiss();
-        return;
-      }
+      const familyName = family?.name || '';
 
-      
-      const familyMembers = await this.familyService.getFamilyMembers(family.name);
-      const owner = familyMembers.find(member => member.role === 'owner');
-
-      if (!owner) {
-        await loading.dismiss();
-        return;
-      }
-
-      
-      const consentCollection = collection(this.firestore, 'Consent Letters');
-
-      
-      let querySnapshot;
-
-      
-      const familyConsentQuery = query(
-        consentCollection,
-        where('familyName', '==', family.name)
-      );
-      querySnapshot = await getDocs(familyConsentQuery);
-
-      
-      if (querySnapshot.empty) {
-        const ownerConsentQuery = query(
-          consentCollection,
-          where('parentName', '==', owner.name)
-        );
-        querySnapshot = await getDocs(ownerConsentQuery);
-      }
-
-      
-      if (querySnapshot.empty) {
-        const ownerUIDQuery = query(
-          consentCollection,
-          where('uid', '==', owner.uid)
-        );
-        querySnapshot = await getDocs(ownerUIDQuery);
-      }
-
-      this.consentLetters = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-
-        this.consentLetters.push({
-          id: doc.id,
+      const letters: ConsentLetterData[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, any>;
+        // Belt-and-suspenders: even if Firestore returns something odd, we
+        // never surface a letter that doesn't actually authorize this user.
+        const fetcherUid = String(data['authorizedFetcherUid'] || '').trim();
+        if (!fetcherUid || fetcherUid !== currentUser.uid) {
+          return;
+        }
+        letters.push({
+          id: docSnap.id,
           letter: data['letter'] || '',
           signature: data['signature'] || '',
-          emergencyFetcher: data['emergencyFetcher'] || false,
-          oneTimeFetcher: data['oneTimeFetcher'] || false,
+          emergencyFetcher: !!data['emergencyFetcher'],
+          oneTimeFetcher: !!data['oneTimeFetcher'],
           dateIssued: data['dateIssued'],
           validUntil: data['validUntil'] || 'Today Only',
           parentName: data['parentName'] || 'Parent',
-          familyName: data['familyName'] || family.name,
-          uid: data['uid'] || ''
+          familyName: data['familyName'] || familyName,
+          uid: data['uid'] || '',
+          authorizedFetcherUid: fetcherUid,
+          authorizedFetcherName: data['authorizedFetcherName'] || '',
+          childName: data['childName'] || '',
+          consentDate: data['consentDate'] || '',
         });
       });
 
-      
-      if (this.consentLetters.length === 0) {
-        
-        const allConsentQuery = collection(this.firestore, 'Consent Letters');
-        const allQuerySnapshot = await getDocs(allConsentQuery);
-
-        const familyMemberUIDs = familyMembers.map(member => member.uid);
-
-        allQuerySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const letterUID = data['uid'];
-
-          
-          if (familyMemberUIDs.includes(letterUID)) {
-            this.consentLetters.push({
-              id: doc.id,
-              letter: data['letter'] || '',
-              signature: data['signature'] || '',
-              emergencyFetcher: data['emergencyFetcher'] || false,
-              oneTimeFetcher: data['oneTimeFetcher'] || false,
-              dateIssued: data['dateIssued'],
-              validUntil: data['validUntil'] || 'Today Only',
-              parentName: data['parentName'] || 'Parent',
-              familyName: data['familyName'] || family.name,
-              uid: data['uid'] || ''
-            });
-          }
-        });
-      }
-
-      
-      this.consentLetters.sort((a, b) => {
-        if (a.dateIssued && b.dateIssued) {
-          const dateA = a.dateIssued.toDate ? a.dateIssued.toDate() : new Date(a.dateIssued);
-          const dateB = b.dateIssued.toDate ? b.dateIssued.toDate() : new Date(b.dateIssued);
-          return dateB.getTime() - dateA.getTime();
-        }
-        return 0;
+      letters.sort((a, b) => {
+        const ta = this.timestampMs(a.dateIssued);
+        const tb = this.timestampMs(b.dateIssued);
+        return tb - ta;
       });
 
-  
-      if (this.consentLetters.length > 0) {
-        this.selectedLetter = this.consentLetters[0];
-      }
-
-      await loading.dismiss();
-    } catch (error) {
-      await loading.dismiss();
+      this.consentLetters = letters;
+      this.selectedLetter = letters.length > 0 ? letters[0] : null;
+    } catch {
+      this.consentLetters = [];
+      this.selectedLetter = null;
     } finally {
       this.isLoading = false;
     }
   }
 
-  selectLetter(letter: ConsentLetterData) {
+  /** Converts a Firestore Timestamp / Date / string into a millisecond value for sorting. */
+  private timestampMs(val: any): number {
+    if (!val) return 0;
+    try {
+      if (typeof val.toMillis === 'function') return val.toMillis();
+      if (typeof val.toDate === 'function') return val.toDate().getTime();
+      const d = new Date(val);
+      return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Formats the stored consent date YYYY-MM-DD for display. */
+  formatConsentDate(ymd: string): string {
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (!y || !m || !d) return ymd;
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  selectLetter(letter: ConsentLetterData): void {
     this.selectedLetter = letter;
   }
 
-  goBack() {
+  goBack(): void {
     this.location.back();
   }
 }

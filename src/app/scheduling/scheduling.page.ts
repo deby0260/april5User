@@ -15,9 +15,13 @@ import {
 import { AuthService } from '../services/auth';
 import { FamilyService, FamilyMember } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
+import { NotificationService } from '../services/notification.service';
 import { LoadingController, ToastController } from '@ionic/angular';
 import { RoleAccessService } from '../services/role-access.service';
 import type { DatetimeHighlightCallback } from '@ionic/core';
+
+/** How far the scheduled pickup repeats from the start date. */
+export type ScheduleRepeatMode = 'single' | 'whole_month';
 
 interface ScheduleData {
   fetcherUID: string;
@@ -30,6 +34,14 @@ interface ScheduleData {
   selectedTime: string;
   familyName: string;
   parentName: string;
+  /** Repeat behaviour applied to the (start) `selectedDate` + `selectedDays` set. */
+  repeatMode: ScheduleRepeatMode;
+  /**
+   * Whole-month mode only: dates the user has tapped to skip (e.g. "Mondays
+   * but not the last one"). Cleared when fetcher / weekdays / month / mode
+   * changes so we never carry stale skips across selections.
+   */
+  excludedDates: string[];
 }
 
 /** Passed from view-schedule via router state when editing an existing pickup */
@@ -61,6 +73,8 @@ export class SchedulingPage implements OnInit {
     selectedTime: '00:00',
     familyName: '',
     parentName: '',
+    repeatMode: 'single',
+    excludedDates: [],
   };
 
   familyMembers: FamilyMember[] = [];
@@ -108,7 +122,8 @@ export class SchedulingPage implements OnInit {
     private panicService: PanicService,
     private loadingController: LoadingController,
     private toastController: ToastController,
-    private roleAccessService: RoleAccessService
+    private roleAccessService: RoleAccessService,
+    private notificationService: NotificationService
   ) {
     const nav = this.router.getCurrentNavigation();
     const fromNav = nav?.extras?.state?.['editSchedule'] as ScheduleEditState | undefined;
@@ -127,8 +142,11 @@ export class SchedulingPage implements OnInit {
 
     this.scheduleAccessLoading = true;
     try {
-      // Family data and role do not depend on each other for first paint; parallel is faster than sequential awaits
-      await Promise.all([this.loadFamilyData(), this.loadUserRole()]);
+      // Resolve family + members + children + role in a single coordinated
+      // pass. Previously `loadFamilyData` and `loadUserRole` each called
+      // `getUserFamily()` (and `loadUserRole` could re-call `getFamilyMembers`)
+      // — duplicating the most expensive lookups on this page.
+      await this.loadFamilyAndRole();
     } finally {
       this.scheduleAccessLoading = false;
     }
@@ -156,11 +174,57 @@ export class SchedulingPage implements OnInit {
     this.scheduleData.selectedDays = dayParts.length > 0 ? dayParts : [];
     this.scheduleData.selectedDate = state.selectedDate;
     this.scheduleData.selectedTime = state.time || '00:00';
+    // Editing operates on a single existing week — start in `single` mode so
+    // the user sees identical-to-create-time behaviour. They can still expand
+    // to whole_month if they want to broaden the series to the full month.
+    this.scheduleData.repeatMode = 'single';
+    this.scheduleData.excludedDates = [];
     const match = this.children.find((c) => c.name === state.childName);
     this.scheduleData.selectedChildren = match
       ? [match]
       : [{ name: state.childName, grade: state.childGrade || '' }];
     this.calendarRemountKey += 1;
+  }
+
+  /**
+   * Single coordinated init pass: resolve the user's family once, then fan
+   * out members/children/role in parallel. Replaces the previous design
+   * where `loadFamilyData` and `loadUserRole` each duplicated `getUserFamily`
+   * and could redundantly call `getFamilyMembers` twice on the same load.
+   */
+  private async loadFamilyAndRole(): Promise<void> {
+    try {
+      const currentUser = this.authService.getCurrentUser();
+      if (!currentUser) return;
+
+      const family = await this.familyService.getUserFamily();
+      if (!family) return;
+
+      this.scheduleData.familyName = family.name;
+      this.scheduleData.parentName = currentUser.fullName || currentUser.email || 'Parent';
+
+      const [members, children, userRole] = await Promise.all([
+        this.familyService.getFamilyMembers(family.name),
+        this.familyService.getFamilyChildren(family.name),
+        this.roleAccessService.getUserRole(),
+      ]);
+
+      this.familyMembers = members;
+      this.children = children;
+
+      if (userRole) {
+        this.currentUserRole = userRole.role;
+        this.canManageSchedule = userRole.canAccessScheduling;
+      } else {
+        const userMember = members.find((member) => member.uid === currentUser.uid);
+        if (userMember) {
+          this.currentUserRole = userMember.role;
+          this.canManageSchedule =
+            userMember.role === 'owner' || userMember.role === 'parent';
+        }
+      }
+    } catch (error) {
+    }
   }
 
   async loadFamilyData() {
@@ -255,6 +319,8 @@ export class SchedulingPage implements OnInit {
       this.scheduleData.companionName = '';
       this.scheduleData.selectedDays = [];
       this.scheduleData.selectedDate = '';
+      this.scheduleData.repeatMode = 'single';
+      this.scheduleData.excludedDates = [];
       this.calendarRemountKey += 1;
       return;
     }
@@ -269,6 +335,8 @@ export class SchedulingPage implements OnInit {
     if (uidChanged) {
       this.scheduleData.selectedDays = [];
       this.scheduleData.selectedDate = '';
+      this.scheduleData.repeatMode = 'single';
+      this.scheduleData.excludedDates = [];
       this.calendarRemountKey += 1;
     }
   }
@@ -300,15 +368,89 @@ export class SchedulingPage implements OnInit {
     } else {
       this.scheduleData.selectedDays = Array.from(new Set([...this.scheduleData.selectedDays, day]));
     }
+    // The set of "matching" dates just changed → drop any per-date skips so the
+    // user never carries a stale exclusion (e.g. last Monday) into a different
+    // weekday selection.
+    this.scheduleData.excludedDates = [];
     this.syncSelectedDateAfterDaysChange();
     this.calendarRemountKey += 1;
   }
 
   onDateChange(event: any) {
-    const selectedDate = event.detail.value;
-    if (selectedDate) {
-      this.scheduleData.selectedDate = String(selectedDate).split('T')[0];
+    const raw = event?.detail?.value;
+    if (!raw) return;
+    const ymd = String(raw).split('T')[0];
+    if (!ymd) return;
+
+    // In whole-month mode the inline calendar doubles as a per-date skip
+    // toggle: tapping a tinted matching weekday in the *currently anchored
+    // month* flips its excluded state; tapping a date in another month is
+    // treated as picking that month (skips reset).
+    if (this.isRepeatMode('whole_month')) {
+      const anchor = this.scheduleData.selectedDate;
+      if (anchor && this.isYmdSameCalendarMonth(ymd, anchor)) {
+        this.toggleWholeMonthExclusion(ymd);
+        return;
+      }
+      this.scheduleData.excludedDates = [];
+      this.scheduleData.selectedDate = ymd;
+      this.calendarRemountKey += 1;
+      return;
     }
+
+    this.scheduleData.selectedDate = ymd;
+  }
+
+  /**
+   * Whole-month mode: flip a date between "scheduled" and "skipped". The
+   * caller already verified this is a matching weekday in the anchored month.
+   * `calendarRemountKey` is bumped so `<ion-datetime>`'s highlight callback
+   * re-runs and the visual state stays in sync.
+   */
+  private toggleWholeMonthExclusion(ymd: string): void {
+    const current = this.scheduleData.excludedDates ?? [];
+    if (current.includes(ymd)) {
+      this.scheduleData.excludedDates = current.filter((d) => d !== ymd);
+    } else {
+      this.scheduleData.excludedDates = [...current, ymd];
+    }
+    this.calendarRemountKey += 1;
+  }
+
+  /** Used by the "Reset skipped days" button in the template. */
+  resetWholeMonthExclusions(): void {
+    if (!this.isRepeatMode('whole_month')) return;
+    if (this.scheduleData.excludedDates.length === 0) return;
+    this.scheduleData.excludedDates = [];
+    this.calendarRemountKey += 1;
+  }
+
+  /** Template helper: how many dates are currently being skipped. */
+  getWholeMonthExcludedCount(): number {
+    if (!this.isRepeatMode('whole_month')) return 0;
+    return this.scheduleData.excludedDates.length;
+  }
+
+  /**
+   * Compact label for the "skipped" chip, e.g. `Skipping: May 25` or
+   * `Skipping: May 4, 11, 25`. Hidden when the skip list is empty.
+   */
+  getWholeMonthExcludedSummary(): string {
+    if (!this.isRepeatMode('whole_month')) return '';
+    const skipped = (this.scheduleData.excludedDates ?? [])
+      .filter((d) => this.isYmdSameCalendarMonth(d, this.scheduleData.selectedDate))
+      .sort();
+    if (skipped.length === 0) return '';
+    const [yFirst, moFirst] = skipped[0].split('-').map(Number);
+    if (!yFirst || !moFirst) return '';
+    const monthLabel = new Date(yFirst, moFirst - 1, 1).toLocaleDateString('en-US', {
+      month: 'short',
+    });
+    const days = skipped
+      .map((d) => parseInt(d.split('-')[2], 10))
+      .filter((n) => !Number.isNaN(n))
+      .join(', ');
+    return `Skipping: ${monthLabel} ${days}`;
   }
 
   /** ion-datetime: noon avoids DST / timezone day-shift */
@@ -381,6 +523,53 @@ export class SchedulingPage implements OnInit {
       textColor: '#0f2d2f',
     };
   };
+
+  /**
+   * Whole-month variant: tint EVERY matching weekday in the same calendar
+   * month as `selectedDate`, clipped to `[minDate, maxDate]` so days that
+   * won't actually be saved (e.g. past days in the current month) stay
+   * un-tinted. Excluded ("skipped") matching dates render in a muted red so
+   * the user can see exactly which dates they've opted out of. The focused
+   * day uses Ionic's default selected styling unless it's been excluded.
+   */
+  highlightWholeMonthMatchingDays: DatetimeHighlightCallback = (dateIsoString: string) => {
+    if (this.scheduleData.selectedDays.length === 0 || !this.scheduleData.selectedDate) {
+      return undefined;
+    }
+    if (!this.isDateEnabled(dateIsoString)) {
+      return undefined;
+    }
+    const datePart = String(dateIsoString).split('T')[0];
+    const minPart = this.minDate.split('T')[0];
+    const maxPart = this.maxDate.split('T')[0];
+    if (datePart < minPart || datePart > maxPart) {
+      return undefined;
+    }
+    if (!this.isYmdSameCalendarMonth(datePart, this.scheduleData.selectedDate)) {
+      return undefined;
+    }
+    const excluded = (this.scheduleData.excludedDates ?? []).includes(datePart);
+    if (excluded) {
+      // Muted red — clearly "off" but still tappable so the user can re-include it.
+      return {
+        backgroundColor: 'rgba(220, 53, 69, 0.18)',
+        textColor: '#9a2632',
+      };
+    }
+    if (datePart === this.scheduleData.selectedDate) {
+      // Let Ionic draw its native "selected" ring on the anchor.
+      return undefined;
+    }
+    return {
+      backgroundColor: 'rgba(18, 156, 174, 0.22)',
+      textColor: '#0f2d2f',
+    };
+  };
+
+  /** Same YYYY-MM segment in two YMD strings. */
+  private isYmdSameCalendarMonth(aYmd: string, bYmd: string): boolean {
+    return aYmd.slice(0, 7) === bYmd.slice(0, 7);
+  }
 
   /** Same calendar week (Monday 00:00 as boundary), local time */
   private isYmdSameMondayWeek(aYmd: string, bYmd: string): boolean {
@@ -467,16 +656,69 @@ export class SchedulingPage implements OnInit {
     return `${y}-${mo}-${day}`;
   }
 
-  /** One row per selected weekday, all in the same Mon-start week as selectedDate */
+  /**
+   * Materialises one entry per (selected weekday × week) within the active
+   * repeat window. Modes:
+   *   - `single`: keep legacy behaviour — every selected weekday in the same
+   *     Mon-start week as `selectedDate`, even days earlier in that week
+   *     than the picked date.
+   *   - `whole_month`: weeks within the picked date's calendar month, clipped
+   *     to `[selectedDate, last day of that month]` so the user gets exactly
+   *     what the calendar shows.
+   */
   private buildToSaveEntries(): { dayLabel: string; date: string }[] {
-    const monday = this.mondayOfWeekContaining(this.scheduleData.selectedDate);
-    const uniqueDays = Array.from(new Set(this.scheduleData.selectedDays));
-    const sorted = uniqueDays.sort(
-      (a, b) =>
-        (SchedulingPage.DAY_SORT_ORDER[a] ?? 99) - (SchedulingPage.DAY_SORT_ORDER[b] ?? 99)
-    );
+    const startYmd = this.scheduleData.selectedDate;
+    if (!startYmd) return [];
+
+    if (this.scheduleData.repeatMode === 'single') {
+      return this.buildEntriesForWeekContaining(startYmd);
+    }
+
+    const endYmd = this.computeEffectiveEndYmd();
+    if (!endYmd || endYmd < startYmd) {
+      // Fall back to the start week if the user hasn't set a valid end date yet.
+      return this.buildEntriesForWeekContaining(startYmd);
+    }
+
+    const sortedDays = this.sortedSelectedDays();
     const out: { dayLabel: string; date: string }[] = [];
-    for (const label of sorted) {
+    const endDate = this.parseYmdLocal(endYmd);
+    if (!endDate) return out;
+
+    let cursor = this.mondayOfWeekContaining(startYmd);
+    // Hard safety cap so an unbounded loop can never run; max ~14 months.
+    let safety = 0;
+    while (cursor.getTime() <= endDate.getTime() && safety < 64) {
+      for (const label of sortedDays) {
+        const off = SchedulingPage.LABEL_TO_MONDAY_OFFSET[label];
+        if (off === undefined) continue;
+        const d = new Date(cursor);
+        d.setDate(cursor.getDate() + off);
+        const ymd = this.ymdFromDate(d);
+        if (ymd >= startYmd && ymd <= endYmd) {
+          out.push({ dayLabel: label, date: ymd });
+        }
+      }
+      cursor = new Date(cursor);
+      cursor.setDate(cursor.getDate() + 7);
+      safety += 1;
+    }
+
+    // User-tapped skips (e.g. "all Mondays except the last one") drop out
+    // here so the preview, save payload, and reminder syncs all agree.
+    const excluded = this.scheduleData.excludedDates;
+    if (excluded && excluded.length > 0) {
+      const skip = new Set(excluded);
+      return out.filter((e) => !skip.has(e.date));
+    }
+    return out;
+  }
+
+  /** Legacy single-week entry generator (preserves prior behaviour). */
+  private buildEntriesForWeekContaining(ymd: string): { dayLabel: string; date: string }[] {
+    const monday = this.mondayOfWeekContaining(ymd);
+    const out: { dayLabel: string; date: string }[] = [];
+    for (const label of this.sortedSelectedDays()) {
       const off = SchedulingPage.LABEL_TO_MONDAY_OFFSET[label];
       if (off === undefined) continue;
       const d = new Date(monday);
@@ -485,6 +727,233 @@ export class SchedulingPage implements OnInit {
     }
     return out;
   }
+
+  private sortedSelectedDays(): string[] {
+    const uniqueDays = Array.from(new Set(this.scheduleData.selectedDays));
+    return uniqueDays.sort(
+      (a, b) =>
+        (SchedulingPage.DAY_SORT_ORDER[a] ?? 99) - (SchedulingPage.DAY_SORT_ORDER[b] ?? 99)
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Repeat-mode UI helpers
+  // -------------------------------------------------------------------------
+
+  /** Called by the segment in the template; never set to an unknown mode. */
+  setRepeatMode(mode: ScheduleRepeatMode): void {
+    if (mode !== 'single' && mode !== 'whole_month') return;
+    if (this.scheduleData.repeatMode === mode) return;
+    this.scheduleData.repeatMode = mode;
+    // Skips only make sense for whole_month and only against the currently
+    // anchored month — easiest to drop them whenever the mode changes.
+    this.scheduleData.excludedDates = [];
+    this.calendarRemountKey += 1;
+  }
+
+  isRepeatMode(mode: ScheduleRepeatMode): boolean {
+    return this.scheduleData.repeatMode === mode;
+  }
+
+  /**
+   * Resolves the inclusive end-date for the active repeat mode. Returns ''
+   * only when there is no selected start date.
+   */
+  private computeEffectiveEndYmd(): string {
+    const start = this.scheduleData.selectedDate;
+    if (!start) return '';
+    switch (this.scheduleData.repeatMode) {
+      case 'single':
+        return start;
+      case 'whole_month':
+        return this.lastDayOfMonthYmd(start);
+    }
+  }
+
+  /** Public-readable label for the small preview chip in the template. */
+  getRepeatPreview(): string {
+    if (
+      !this.scheduleData.selectedDate ||
+      this.scheduleData.selectedDays.length === 0 ||
+      this.scheduleData.selectedChildren.length === 0
+    ) {
+      return '';
+    }
+    const entries = this.buildToSaveEntries();
+    if (entries.length === 0) return '';
+    const childCount = this.scheduleData.selectedChildren.length;
+    const total = entries.length * childCount;
+    const startLabel = this.getFormattedDate();
+
+    if (this.scheduleData.repeatMode === 'single') {
+      return `${total} pickup(s) for the week of ${startLabel}.`;
+    }
+    const last = entries[entries.length - 1].date;
+    const endLabel = this.formatYmdShort(last);
+    return `${total} pickup(s) — every selected weekday from ${startLabel} through ${endLabel}.`;
+  }
+
+  // -------------------------------------------------------------------------
+  // Whole-month picker (Step 4 alternate UI)
+  // -------------------------------------------------------------------------
+
+  /** Lower bound for the month-year picker — same as the day calendar (today). */
+  get wholeMonthMinIso(): string {
+    return this.minDate;
+  }
+
+  /** Upper bound for the month-year picker — same as the day calendar (~1 yr). */
+  get wholeMonthMaxIso(): string {
+    return this.maxDate;
+  }
+
+  /**
+   * `[value]` for the month-year `ion-datetime`. Anchored to the 1st at noon
+   * of `selectedDate`'s month so the picker never DST-shifts to the previous
+   * month at midnight in some locales.
+   */
+  get wholeMonthValueIso(): string {
+    const ymd = this.scheduleData.selectedDate || this.minDate.split('T')[0];
+    const [y, m] = String(ymd || '').split('-').map(Number);
+    if (!y || !m) return '';
+    const mm = String(m).padStart(2, '0');
+    return `${y}-${mm}-01T12:00:00`;
+  }
+
+  /**
+   * When the user picks a month, snap `selectedDate` to the **first selected
+   * weekday in that month** that's still in `[today, maxDate]`. If no
+   * matching weekday exists in the chosen month (e.g. the user picked the
+   * current month but every matching day has already passed), keep the
+   * previous selection and surface a friendly toast.
+   */
+  async onWholeMonthPicked(event: any): Promise<void> {
+    const v = event?.detail?.value;
+    if (!v) return;
+    const m = String(v).match(/^(\d{4})-(\d{2})/);
+    if (!m) return;
+    const year = parseInt(m[1], 10);
+    const month1 = parseInt(m[2], 10);
+    if (Number.isNaN(year) || Number.isNaN(month1)) return;
+
+    const ymd = this.firstAvailableDateInMonth(year, month1);
+    if (!ymd) {
+      await this.showToast(
+        'No upcoming pickup days in that month. Pick a different month or change weekdays.'
+      );
+      return;
+    }
+    // Skips are scoped to a single month — clear them when the user moves to
+    // another month so we don't silently retain "skip May 25" while showing June.
+    this.scheduleData.excludedDates = [];
+    this.scheduleData.selectedDate = ymd;
+    this.calendarRemountKey += 1;
+  }
+
+  /**
+   * First day in `(year, month1)` whose weekday is in `selectedDays` AND
+   * lies inside `[minDate, maxDate]`. Used to anchor `selectedDate` after
+   * the user picks a month from the month-year picker.
+   */
+  private firstAvailableDateInMonth(year: number, month1: number): string {
+    if (this.scheduleData.selectedDays.length === 0) return '';
+    const want = new Set(
+      this.scheduleData.selectedDays.map((d) => this.labelToJsDay(d)).filter((n) => n >= 0)
+    );
+    const minPart = this.minDate.split('T')[0];
+    const maxPart = this.maxDate.split('T')[0];
+    const lastDay = new Date(year, month1, 0).getDate();
+    for (let day = 1; day <= lastDay; day++) {
+      const d = new Date(year, month1 - 1, day);
+      if (!want.has(d.getDay())) continue;
+      const ymd = this.ymdFromDate(d);
+      if (ymd >= minPart && ymd <= maxPart) {
+        return ymd;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Compact one-line summary of the dates that the whole-month schedule will
+   * save, grouped by weekday. Examples:
+   *   "May 2026 — Mon: 4, 11, 18, 25"
+   *   "May 2026 — Mon: 4, 11, 18, 25 · Tue: 5, 12, 19, 26"
+   */
+  getWholeMonthDatesSummary(): string {
+    if (!this.isRepeatMode('whole_month')) return '';
+    if (
+      !this.scheduleData.selectedDate ||
+      this.scheduleData.selectedDays.length === 0
+    ) {
+      return '';
+    }
+    const entries = this.buildToSaveEntries();
+    if (entries.length === 0) return '';
+
+    const groups = new Map<string, number[]>();
+    const order: string[] = [];
+    for (const e of entries) {
+      const [y, mo, day] = e.date.split('-').map(Number);
+      if (!y || !mo || !day) continue;
+      const dt = new Date(y, mo - 1, day);
+      const key = dt.toLocaleDateString('en-US', { weekday: 'short' });
+      if (!groups.has(key)) {
+        groups.set(key, []);
+        order.push(key);
+      }
+      groups.get(key)!.push(day);
+    }
+
+    const [yFirst, moFirst] = entries[0].date.split('-').map(Number);
+    const monthLabel = new Date(yFirst, moFirst - 1, 1).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const parts = order.map(
+      (dayName) => `${dayName}: ${groups.get(dayName)!.join(', ')}`
+    );
+    return `${monthLabel} — ${parts.join(' · ')}`;
+  }
+
+  /** Empty-state hint shown when no matching weekday exists in the picked month. */
+  getWholeMonthEmptyHint(): string {
+    if (!this.isRepeatMode('whole_month')) return '';
+    if (this.scheduleData.selectedDays.length === 0) return '';
+    if (!this.scheduleData.selectedDate) {
+      return 'Pick a month above to see the dates that will be saved.';
+    }
+    const entries = this.buildToSaveEntries();
+    if (entries.length > 0) return '';
+    return 'No matching weekdays in that month yet. Try a different month or weekdays.';
+  }
+
+  private formatYmdShort(ymd: string): string {
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (!y || !m || !d) return ymd;
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  private lastDayOfMonthYmd(ymd: string): string {
+    const [y, m] = ymd.split('-').map(Number);
+    if (!y || !m) return ymd;
+    // Day 0 of the next month = last day of the current month (local time).
+    const last = new Date(y, m, 0);
+    return this.ymdFromDate(last);
+  }
+
+  private parseYmdLocal(ymd: string): Date | null {
+    const [y, m, d] = String(ymd || '').split('-').map((n) => parseInt(n, 10));
+    if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
+    const dt = new Date(y, m - 1, d);
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+  }
+
 
   private normalizeTimeStr(t: string): string {
     return String(t || '').trim();
@@ -593,6 +1062,10 @@ export class SchedulingPage implements OnInit {
     }
 
     const toSave = this.buildToSaveEntries();
+    if (toSave.length === 0) {
+      await this.showToast('No matching dates in the chosen range. Adjust days or dates.');
+      return;
+    }
     const conflictMessage = await this.checkConflictsWithExistingPending(
       toSave,
       this.scheduleData.selectedChildren,
@@ -667,23 +1140,61 @@ export class SchedulingPage implements OnInit {
         for (const id of this.editDocIds) {
           batch.delete(doc(this.firestore, 'Schedules', id));
         }
+        const createdForReminders: Array<{
+          id: string;
+          dateYmd: string;
+          childName: string;
+        }> = [];
         for (const entry of toSave) {
           for (const child of this.scheduleData.selectedChildren) {
             const ref = doc(collection(this.firestore, 'Schedules'));
             batch.set(ref, buildDocPayload(entry, child));
+            createdForReminders.push({
+              id: ref.id,
+              dateYmd: entry.date,
+              childName: String(child?.name || '').trim(),
+            });
           }
         }
         await batch.commit();
         this.editDocIds = null;
         this.isEditMode = false;
+        if (String(currentUser.uid) === String(assign.uid)) {
+          await Promise.all(
+            createdForReminders.map((row) =>
+              this.notificationService.schedulePickupReminder30m({
+                scheduleId: row.id,
+                familyName: this.scheduleData.familyName,
+                childName: row.childName,
+                scheduleDateYmd: row.dateYmd,
+                scheduleTime: this.scheduleData.selectedTime,
+              })
+            )
+          );
+        }
       } else {
-        const schedulePromises: Promise<unknown>[] = [];
+        const pairs: { entry: { dayLabel: string; date: string }; child: any }[] = [];
         for (const entry of toSave) {
           for (const child of this.scheduleData.selectedChildren) {
-            schedulePromises.push(addDoc(schedulesCollection, buildDocPayload(entry, child)));
+            pairs.push({ entry, child });
           }
         }
-        await Promise.all(schedulePromises);
+        const refs = await Promise.all(
+          pairs.map(({ entry, child }) => addDoc(schedulesCollection, buildDocPayload(entry, child)))
+        );
+        if (String(currentUser.uid) === String(assign.uid)) {
+          await Promise.all(
+            refs.map((ref, i) =>
+              this.notificationService.schedulePickupReminder30m({
+                scheduleId: ref.id,
+                familyName: this.scheduleData.familyName,
+                childName: String(pairs[i].child?.name || '').trim(),
+                scheduleDateYmd: pairs[i].entry.date,
+                scheduleTime: this.scheduleData.selectedTime,
+              })
+            )
+          );
+        }
       }
 
       await this.sendScheduleNotifications(Array.from(notifyByFetcher.values()));

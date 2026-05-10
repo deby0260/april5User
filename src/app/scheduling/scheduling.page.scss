@@ -114,6 +114,64 @@
       }
     }
 
+    /* ---- REPEAT MODE (Step 3) ---- */
+    .repeat-mode-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 6px;
+
+      @media (max-width: 480px) {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .repeat-mode-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: white;
+      border: 2px solid #e0e0e0;
+      color: #2d2d2d;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+      min-height: 72px;
+
+      ion-icon {
+        font-size: 22px;
+        color: #129CAE;
+      }
+
+      .repeat-mode-title {
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .repeat-mode-sub {
+        font-size: 11px;
+        color: #6a7c7e;
+        line-height: 1.25;
+      }
+
+      &:hover:not(.selected) {
+        border-color: #129CAE;
+      }
+
+      &.selected {
+        background: rgba(18, 156, 174, 0.10);
+        border-color: #129CAE;
+        box-shadow: 0 4px 14px rgba(18, 156, 174, 0.20);
+
+        .repeat-mode-title { color: #0f2d2f; }
+      }
+    }
+
     .date-button {
       --background: white;
       --border-radius: 12px;
@@ -153,6 +211,137 @@
         margin-left: 8px;
       }
     }
+  }
+
+  .repeat-preview {
+    margin: -10px 0 22px;
+    display: flex;
+
+    .info-chip {
+      --background: rgba(18, 156, 174, 0.10);
+      --color: #0f2d2f;
+      font-size: 12px;
+      font-weight: 600;
+
+      ion-icon { color: #129CAE; margin-right: 4px; }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Whole-month picker (Step 4 alternate UI)
+  // ---------------------------------------------------------------------------
+
+  .month-trigger-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .month-year-trigger {
+    --background: #ffffff;
+    --color: #0f2d2f;
+    --border-radius: 12px;
+    --padding-start: 16px;
+    --padding-end: 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    min-height: 50px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      border-color: #129CAE;
+      box-shadow: 0 4px 14px rgba(18, 156, 174, 0.20);
+    }
+
+    &::part(native) {
+      background: #ffffff;
+      color: #0f2d2f;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 10px 16px;
+    }
+  }
+
+  .month-calendar-mount {
+    margin-top: 14px;
+    border: 1.5px solid #129CAE;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 2px 10px rgba(18, 156, 174, 0.10);
+    overflow: hidden;
+
+    .month-inline-datetime {
+      width: 100%;
+      --background: #ffffff;
+    }
+  }
+
+  .dates-summary {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+
+    .summary-chip {
+      --background: rgba(18, 156, 174, 0.10);
+      --color: #0f2d2f;
+      font-size: 12px;
+      font-weight: 600;
+      height: auto;
+      min-height: 32px;
+      padding: 6px 12px;
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.35;
+
+      ion-icon {
+        color: #129CAE;
+        margin-right: 6px;
+        flex-shrink: 0;
+      }
+
+      ion-label {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+      }
+    }
+
+    &.skipped-summary .summary-chip.skipped-chip {
+      --background: rgba(220, 53, 69, 0.12);
+      --color: #9a2632;
+
+      ion-icon {
+        color: #c0392b;
+      }
+    }
+
+    .reset-skips-btn {
+      --color: #129CAE;
+      --padding-start: 8px;
+      --padding-end: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+      margin: 0;
+
+      ion-icon {
+        font-size: 16px;
+      }
+    }
+  }
+
+  .step-hint.skip-hint {
+    display: block;
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .action-section {
@@ -434,3 +623,24 @@
 
 /* Keep trigger full width */
 .custom-datetime { width: 100%; .date-button { width: 100%; } }
+
+/* Whole-month picker modal — themed to match the existing teal palette. */
+.scheduling-month-modal {
+  --width: auto;
+  --height: auto;
+  --max-width: 92vw;
+  --border-radius: 16px;
+  --backdrop-opacity: 0.5;
+
+  &::part(content) {
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  ion-datetime {
+    --background: #ffffff;
+    --background-rgb: 255, 255, 255;
+    --wheel-highlight-background: rgba(18, 156, 174, 0.12);
+    --wheel-fade-background-rgb: 255, 255, 255;
+  }
+}

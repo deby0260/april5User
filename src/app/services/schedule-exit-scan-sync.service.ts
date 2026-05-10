@@ -6,9 +6,9 @@ import {
   where,
   getDocs,
   doc,
-  updateDoc,
   addDoc,
   serverTimestamp,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { NotificationService } from './notification.service';
 
@@ -201,14 +201,19 @@ export class ScheduleExitScanSyncService {
     familyName: string
   ): Promise<void> {
     const p = group.primary;
+    // Batch all schedule updates into a single round-trip instead of awaiting
+    // per-doc updates sequentially. Firestore batches are atomic and accept
+    // up to 500 writes — well above what one merged group will ever hold.
+    const batch = writeBatch(this.firestore);
     for (const docId of group.docIds) {
       const scheduleDoc = doc(this.firestore, 'Schedules', docId);
-      await updateDoc(scheduleDoc, {
+      batch.update(scheduleDoc, {
         'Status': 'completed',
         'Completed At': serverTimestamp(),
         'Completed By': completedBy,
       });
     }
+    await batch.commit();
 
     const notificationsCollection = collection(this.firestore, 'Notifications');
     await addDoc(notificationsCollection, {
