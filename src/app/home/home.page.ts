@@ -176,6 +176,49 @@ export class HomePage implements OnInit {
     return String(a.time).localeCompare(String(b.time));
   }
 
+  /**
+   * "Upcoming Pickups" must hide any pending row whose scheduled date+time
+   * has already elapsed. Without this, a missed pickup (status stays
+   * `pending` because no exit scan closed it) shows up indefinitely as the
+   * "Next Pickup" — see e.g. a Sunday 8:30 PM slot still showing on Monday
+   * morning.
+   *
+   * Behaviour:
+   *   - If we have both a parseable date and time → compare exact slot
+   *     timestamp to `Date.now()`.
+   *   - If we have a date but no parseable time → keep the row visible
+   *     through the end of that calendar day (so a "no-time-set" entry
+   *     doesn't vanish at midnight when it might still be valid).
+   *   - If we can't parse the date at all → hide it (we can't sort or
+   *     reason about it on the upcoming feed).
+   */
+  private isUpcomingPickupSlot(row: { date: string; time: string }): boolean {
+    const ymd = this.toLocalYmd(row.date);
+    if (!ymd) return false;
+    const parts = ymd.split('-').map((n) => parseInt(n, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return false;
+    const [y, mo, d] = parts;
+
+    const slot = new Date(y, mo - 1, d);
+    slot.setHours(0, 0, 0, 0);
+
+    const rawTime = String(row.time || '').trim();
+    if (rawTime) {
+      const minutes = this.parseScheduleTimeToMinutesSafe(rawTime);
+      if (minutes > 0 || /^0?0?:00(?::\d{2})?\s*(AM)?$/i.test(rawTime)) {
+        slot.setMinutes(minutes);
+      } else {
+        // Time string didn't parse cleanly — fall back to end-of-day so a
+        // weird value doesn't silently hide a same-day pickup.
+        slot.setHours(23, 59, 59, 999);
+      }
+    } else {
+      slot.setHours(23, 59, 59, 999);
+    }
+
+    return slot.getTime() >= Date.now();
+  }
+
   private createdAtMs(v: any): number {
     if (v == null) return 0;
     if (typeof v.toMillis === 'function') return v.toMillis();
@@ -265,9 +308,12 @@ export class HomePage implements OnInit {
       });
 
       const merged = this.mergeDuplicatePickups(pending);
-      merged.sort((a, b) => this.compareSchedulesChronologically(a, b));
+      // Drop pending rows whose slot has already passed — they're missed
+      // pickups, not upcoming ones, and belong on the Pick Up Log instead.
+      const upcomingOnly = merged.filter((row) => this.isUpcomingPickupSlot(row));
+      upcomingOnly.sort((a, b) => this.compareSchedulesChronologically(a, b));
 
-      this.upcomingPickups = merged.map((row) => ({
+      this.upcomingPickups = upcomingOnly.map((row) => ({
         id: row.id,
         date: row.date,
         time: row.time,

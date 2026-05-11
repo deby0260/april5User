@@ -161,7 +161,11 @@
 
       .signature-canvas {
         width: 100%;
-        height: 120px;
+        // Matches the JS-side canvas.height = 180 in
+        // ConsentLetterPage.initializeSignatureCanvas — bigger drawing
+        // area saves a higher-resolution PNG so the viewer can render
+        // it large and crisp.
+        height: 180px;
         display: block;
         cursor: crosshair;
         background: white;

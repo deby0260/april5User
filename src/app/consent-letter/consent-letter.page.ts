@@ -234,12 +234,18 @@ export class ConsentLetterPage implements OnInit, AfterViewInit {
       const canvas = this.signatureCanvas.nativeElement;
       this.ctx = canvas.getContext('2d');
 
+      // The previous 300x120 capture left the saved PNG so low-res that
+      // the viewer page rendered it as a faint dot. Match the displayed
+      // CSS width (full container) and tall enough (180px) that pen
+      // strokes have real resolution to scale up cleanly in the viewer's
+      // signature card.
       canvas.width = canvas.offsetWidth;
-      canvas.height = 120;
+      canvas.height = 180;
 
       if (this.ctx) {
         this.ctx.strokeStyle = '#000';
-        this.ctx.lineWidth = 2;
+        // Slightly thicker strokes carry the eye after scaling.
+        this.ctx.lineWidth = 2.5;
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
       }
