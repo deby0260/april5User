@@ -16,5 +16,5 @@ export const environment = {
   },
   firebaseFunctionsRegion: 'us-central1',
   maxNotificationEmailsPerSync: 30,
-  notificationEmailMode: 'resend_callable' as const,
+  notificationEmailMode: 'mail_callable' as const,
 };

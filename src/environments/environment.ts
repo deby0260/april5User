@@ -23,8 +23,8 @@ export const environment = {
   firebaseFunctionsRegion: 'us-central1',
   /** Cap how many notification emails are requested per visit to the Notifications screen. */
   maxNotificationEmailsPerSync: 30,
-  /** Server callable `sendNotificationDigestEmails` sends via Resend (API key on server only). */
-  notificationEmailMode: 'resend_callable' as 'resend_callable',
+  /** Server callable `sendNotificationDigestEmails` sends via Gmail (nodemailer; secrets on server only). */
+  notificationEmailMode: 'mail_callable' as 'mail_callable',
 };
 
 /*

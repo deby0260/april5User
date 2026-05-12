@@ -46,12 +46,14 @@ export class SettingsPage implements OnInit {
     this.currentUser = this.authService.getCurrentUser();
     this.loadSettings();
     await this.mergeEmailPreferenceFromProfile();
+    await this.mergeSmsPreferenceFromProfile();
   }
 
   /** Reconcile native listeners if the user changed settings in another session or before login. */
   async ionViewWillEnter() {
     this.loadSettings();
     await this.mergeEmailPreferenceFromProfile();
+    await this.mergeSmsPreferenceFromProfile();
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
   }
 
@@ -65,8 +67,8 @@ export class SettingsPage implements OnInit {
 
   async saveSettings() {
     localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
-    void this.syncEmailNotificationPreferenceToProfile();
-    void this.syncSmsNotificationPreferenceToProfile();
+    await this.syncEmailNotificationPreferenceToProfile();
+    await this.syncSmsNotificationPreferenceToProfile();
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
     if (!this.settings.appNotifications) {
       await this.showToast('App notifications disabled on this device');
@@ -92,10 +94,11 @@ export class SettingsPage implements OnInit {
         { merge: true }
       );
     } catch (e) {
+      console.error('syncEmailNotificationPreferenceToProfile', e);
     }
   }
 
-  /** Aligns with Cloud Function `sendSmsOnNotificationCreate` (skips when false in Registerd). */
+  /** Aligns with Cloud Function `sendSmsOnNotificationCreate` (only sends when true in Registerd). */
   private async syncSmsNotificationPreferenceToProfile() {
     const u = this.currentUser;
     if (!u?.uid) {
@@ -108,6 +111,7 @@ export class SettingsPage implements OnInit {
         { merge: true }
       );
     } catch (e) {
+      console.error('syncSmsNotificationPreferenceToProfile', e);
     }
   }
 
@@ -127,6 +131,27 @@ export class SettingsPage implements OnInit {
         localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
       }
     } catch (e) {
+      console.error('mergeEmailPreferenceFromProfile', e);
+    }
+  }
+
+  private async mergeSmsPreferenceFromProfile() {
+    const uid = this.currentUser?.uid;
+    if (!uid) {
+      return;
+    }
+    try {
+      const snap = await getDoc(doc(this.firestore, 'Registerd', uid));
+      if (!snap.exists()) {
+        return;
+      }
+      const v = snap.get('smsNotifications');
+      if (typeof v === 'boolean') {
+        this.settings.smsNotifications = v;
+        localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
+      }
+    } catch (e) {
+      console.error('mergeSmsPreferenceFromProfile', e);
     }
   }
 
@@ -298,7 +323,7 @@ export class SettingsPage implements OnInit {
         },
         {
           text: 'Clear',
-          handler: () => {
+          handler: async () => {
             localStorage.clear();
             this.settings = {
               appNotifications: true,
@@ -307,7 +332,23 @@ export class SettingsPage implements OnInit {
               darkMode: false,
               language: 'English'
             };
-            this.showToast('App data cleared');
+            localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
+            this.currentUser = this.authService.getCurrentUser();
+            if (this.currentUser?.uid) {
+              try {
+                await setDoc(
+                  doc(this.firestore, 'Registerd', this.currentUser.uid),
+                  {
+                    smsNotifications: false,
+                    emailNotifications: false,
+                  },
+                  { merge: true }
+                );
+              } catch (e) {
+                console.error('clearData Registerd sync', e);
+              }
+            }
+            await this.showToast('App data cleared');
           }
         }
       ]

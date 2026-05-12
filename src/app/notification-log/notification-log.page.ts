@@ -183,6 +183,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
             title: n.title,
             displayMessage: this.buildDetailBody(n),
             time: this.detailTimestamp(n),
+            type: n.type,
           }))
         );
       }

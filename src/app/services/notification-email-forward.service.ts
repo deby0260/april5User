@@ -11,6 +11,8 @@ export interface EmailableNotificationItem {
   title: string;
   displayMessage: string;
   time: string;
+  /** Matches Firestore `Notifications.type` for email subject/body (e.g. admin_announcement). */
+  type?: string;
 }
 
 @Injectable({
@@ -34,10 +36,10 @@ export class NotificationEmailForwardService {
 
   /**
    * Sends one email per new notification via HTTPS callable `sendNotificationDigestEmails`
-   * (Resend on the server; API key never in the app).
+   * (Gmail SMTP via nodemailer on Cloud Functions; secrets never in the app).
    */
   async forwardNewNotifications(items: EmailableNotificationItem[]): Promise<void> {
-    if (environment.notificationEmailMode !== 'resend_callable') {
+    if (environment.notificationEmailMode !== 'mail_callable') {
       return;
     }
     if (!this.isEmailForwardingEnabled()) {
@@ -62,6 +64,7 @@ export class NotificationEmailForwardService {
           title: n.title,
           displayMessage: n.displayMessage,
           time: n.time,
+          type: n.type ?? '',
         })),
       });
       const data = res.data as { emailedIds?: string[] };

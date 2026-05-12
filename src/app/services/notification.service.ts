@@ -41,10 +41,15 @@ type PickupReminderExtra = {
   childName?: string;
 };
 
+/** Narrow surface for pickup reminder sync (used after login / home / schedule views). */
+export interface PickupReminderSync {
+  syncPendingPickupReminders30mForCurrentUser(opts?: { force?: boolean }): Promise<void>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
-export class NotificationService {
+export class NotificationService implements PickupReminderSync {
   private isInitialized = false;
   /** Push + local listeners attached (reset when user turns off app notifications). */
   private nativeStackAttached = false;
@@ -379,7 +384,7 @@ export class NotificationService {
    * was within {@link NotificationService.PICKUP_REMINDER_SYNC_MIN_INTERVAL_MS}
    * to limit Firestore reads during background refreshes.
    */
-  async syncPendingPickupReminders30mForCurrentUser(opts?: { force?: boolean }): Promise<void> {
+  public async syncPendingPickupReminders30mForCurrentUser(opts?: { force?: boolean }): Promise<void> {
     if (!this.readAppNotificationsEnabled()) {
       return;
     }

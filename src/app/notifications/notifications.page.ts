@@ -108,6 +108,7 @@ export class NotificationsPage implements OnInit, OnDestroy {
             title: n.title,
             displayMessage: this.formatNotificationDisplayMessage(n),
             time: n.time,
+            type: n.type,
           }))
         );
       }
