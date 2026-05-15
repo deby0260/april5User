@@ -54,12 +54,6 @@
               <ion-icon name="trash-outline"></ion-icon>
             </ion-button>
           </div>
-          <div class="creator-badge" *ngIf="member.role === 'owner'">
-            <ion-chip color="primary" class="creator-chip">
-              <ion-icon name="star"></ion-icon>
-              <ion-label>Creator</ion-label>
-            </ion-chip>
-          </div>
         </div>
 
         <div *ngIf="familyData.children.length > 0" class="children-section">
@@ -78,19 +72,6 @@
                 class="avatar-icon"></ion-icon>
             </div>
             <div class="member-info">
-              <div class="verification-status" *ngIf="child.isVerified">
-                <ion-chip color="success" class="verified-chip">
-                  <ion-icon name="checkmark-circle" slot="start"></ion-icon>
-                  <ion-label>Verified</ion-label>
-                </ion-chip>
-              </div>
-              <div class="verification-status" *ngIf="!child.isVerified">
-                <ion-chip color="warning" class="unverified-chip">
-                  <ion-icon name="time" slot="start"></ion-icon>
-                  <ion-label>Pending Verification</ion-label>
-                </ion-chip>
-              </div>
-
               <h4 class="member-name">{{ child.name }}</h4>
               <p class="member-role">{{ child.gradeLevel }}</p>
             </div>

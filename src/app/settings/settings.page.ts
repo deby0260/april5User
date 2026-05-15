@@ -2,10 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Capacitor } from '@capacitor/core';
 import { AuthService, UserData } from '../services/auth';
-import { AlertController, ToastController } from '@ionic/angular';
+import { ActionSheetController, AlertController, ToastController } from '@ionic/angular';
 import { Firestore, doc, getDoc, setDoc } from '@angular/fire/firestore';
 import { NotificationService } from '../services/notification.service';
 import { PasswordChangeService } from '../services/password-change.service';
+import { ImagePickerService } from '../services/image-picker';
+import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
 
 interface AppSettings {
   appNotifications: boolean;
@@ -37,9 +39,12 @@ export class SettingsPage implements OnInit {
     private authService: AuthService,
     private firestore: Firestore,
     private alertController: AlertController,
+    private actionSheetController: ActionSheetController,
     private toastController: ToastController,
     private notificationService: NotificationService,
-    private passwordChangeService: PasswordChangeService
+    private passwordChangeService: PasswordChangeService,
+    private imagePickerService: ImagePickerService,
+    private notificationFeedsBackground: NotificationFeedsBackgroundService
   ) { }
 
   async ngOnInit() {
@@ -51,6 +56,9 @@ export class SettingsPage implements OnInit {
 
   /** Reconcile native listeners if the user changed settings in another session or before login. */
   async ionViewWillEnter() {
+    this.currentUser =
+      (await this.authService.reloadCurrentUserFromFirestore()) ??
+      this.authService.getCurrentUser();
     this.loadSettings();
     await this.mergeEmailPreferenceFromProfile();
     await this.mergeSmsPreferenceFromProfile();
@@ -70,6 +78,7 @@ export class SettingsPage implements OnInit {
     await this.syncEmailNotificationPreferenceToProfile();
     await this.syncSmsNotificationPreferenceToProfile();
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
+    void this.notificationFeedsBackground.ensureRunning();
     if (!this.settings.appNotifications) {
       await this.showToast('App notifications disabled on this device');
     } else if (!Capacitor.isNativePlatform()) {
@@ -207,9 +216,104 @@ export class SettingsPage implements OnInit {
     await alert.present();
   }
 
-  editProfile() {
-    
-    this.showToast('Edit profile feature coming soon');
+  async editProfile(): Promise<void> {
+    if (!this.currentUser?.uid) {
+      await this.showToast('Please log in first.');
+      return;
+    }
+
+    const sheet = await this.actionSheetController.create({
+      header: 'Edit Profile',
+      buttons: [
+        {
+          text: 'Name & contact number',
+          handler: () => {
+            void this.presentEditProfileAlert();
+          },
+        },
+        {
+          text: 'Profile photo',
+          handler: () => {
+            void this.changeProfilePhoto();
+          },
+        },
+        { text: 'Cancel', role: 'cancel' },
+      ],
+    });
+    await sheet.present();
+  }
+
+  private async presentEditProfileAlert(): Promise<void> {
+    const user = this.currentUser;
+    if (!user) {
+      return;
+    }
+
+    const alert = await this.alertController.create({
+      header: 'Edit Profile',
+      message: `Email: ${user.email} (cannot be changed here)`,
+      inputs: [
+        {
+          name: 'fullName',
+          type: 'text',
+          placeholder: 'Full name',
+          value: user.fullName || '',
+        },
+        {
+          name: 'contactNumber',
+          type: 'tel',
+          placeholder: 'Contact number (11 digits)',
+          value: user.contactNumber || '',
+        },
+      ],
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Save',
+          handler: async (data) => {
+            const result = await this.authService.updateProfile({
+              fullName: String(data?.fullName || ''),
+              contactNumber: String(data?.contactNumber || ''),
+            });
+            if (!result.success) {
+              await this.showToast(result.message);
+              return false;
+            }
+            this.currentUser = this.authService.getCurrentUser();
+            await this.showToast(result.message);
+            return true;
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  private async changeProfilePhoto(): Promise<void> {
+    try {
+      const result = await this.imagePickerService.pickImage();
+      if (!result.success || !result.imageData) {
+        if (result.error && result.error !== 'Image selection cancelled') {
+          await this.showToast(result.error);
+        }
+        return;
+      }
+
+      let imageData = result.imageData;
+      if (!this.imagePickerService.validateImageSize(imageData, 500)) {
+        imageData = await this.imagePickerService.compressImage(imageData, 0.5);
+      }
+
+      const update = await this.authService.updateProfile({ profilePicture: imageData });
+      if (!update.success) {
+        await this.showToast(update.message);
+        return;
+      }
+      this.currentUser = this.authService.getCurrentUser();
+      await this.showToast('Profile photo updated.');
+    } catch {
+      await this.showToast('Failed to update profile photo.');
+    }
   }
 
   editPrivacy() {

@@ -5,6 +5,17 @@
       <h3>Profile</h3>
       <div class="settings-group">
         <div class="profile-info">
+          <ion-avatar class="profile-avatar" aria-hidden="true">
+            <img
+              *ngIf="currentUser.profilePicture"
+              [src]="currentUser.profilePicture"
+              [alt]="currentUser.fullName" />
+            <ion-icon
+              *ngIf="!currentUser.profilePicture"
+              name="person-circle"
+              class="profile-avatar-placeholder">
+            </ion-icon>
+          </ion-avatar>
           <div class="profile-details">
             <h4>{{ currentUser.fullName }}</h4>
             <p>{{ currentUser.email }}</p>
@@ -46,34 +57,10 @@
         </div>
       </div>
     </div>
-
-    
-    <div class="settings-section">
-      <h3>Appearance</h3>
-      <div class="settings-group">
-        <div class="setting-item">
-          <span class="setting-label">Dark Mode</span>
-          <ion-toggle
-            [(ngModel)]="settings.darkMode"
-            class="setting-toggle"
-            (ionChange)="toggleDarkMode()">
-          </ion-toggle>
-        </div>
-      </div>
-    </div>
-
     
     <div class="settings-section">
       <h3>Account</h3>
       <div class="settings-group">
-        <div class="setting-item clickable" (click)="changeLanguage()">
-          <span class="setting-label">Language</span>
-          <div class="setting-value">
-            <span>{{ settings.language }}</span>
-            <ion-icon name="chevron-forward" class="chevron-icon"></ion-icon>
-          </div>
-        </div>
-
         <div class="setting-item clickable" (click)="editProfile()">
           <span class="setting-label">Edit Profile</span>
           <div class="setting-value">

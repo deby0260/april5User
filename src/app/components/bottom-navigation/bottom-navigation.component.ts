@@ -41,6 +41,7 @@ export class BottomNavigationComponent implements OnInit, OnDestroy {
       });
 
     void this.checkUserFamilyStatus();
+    void this.authService.syncDeviceTimeZoneToProfile();
     void this.notificationFeedsBackground.ensureRunning();
 
     // Keep nav state consistent across route changes.

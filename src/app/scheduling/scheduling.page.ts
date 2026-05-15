@@ -519,7 +519,7 @@ export class SchedulingPage implements OnInit {
       return undefined;
     }
     return {
-      backgroundColor: 'rgba(18, 156, 174, 0.22)',
+      backgroundColor: 'rgba(18, 156, 174, 0.38)',
       textColor: '#0f2d2f',
     };
   };
@@ -552,7 +552,7 @@ export class SchedulingPage implements OnInit {
     if (excluded) {
       // Muted red — clearly "off" but still tappable so the user can re-include it.
       return {
-        backgroundColor: 'rgba(220, 53, 69, 0.18)',
+        backgroundColor: 'rgba(220, 53, 69, 0.28)',
         textColor: '#9a2632',
       };
     }
@@ -561,7 +561,7 @@ export class SchedulingPage implements OnInit {
       return undefined;
     }
     return {
-      backgroundColor: 'rgba(18, 156, 174, 0.22)',
+      backgroundColor: 'rgba(18, 156, 174, 0.38)',
       textColor: '#0f2d2f',
     };
   };
@@ -786,7 +786,7 @@ export class SchedulingPage implements OnInit {
     const startLabel = this.getFormattedDate();
 
     if (this.scheduleData.repeatMode === 'single') {
-      return `${total} pickup(s) for the week of ${startLabel}.`;
+      return `${total} pickup(s) for the date of ${startLabel}.`;
     }
     const last = entries[entries.length - 1].date;
     const endLabel = this.formatYmdShort(last);

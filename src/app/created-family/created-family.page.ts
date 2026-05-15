@@ -234,9 +234,7 @@ export class CreatedFamilyPage implements OnInit {
   }
 
   getRoleDisplayName(role: string): string {
-    return role === 'owner'
-      ? 'Owner'
-      : role === 'parent'
+    return role === 'owner' || role === 'parent'
       ? 'Parent'
       : role === 'companion'
       ? 'Companion'
@@ -244,9 +242,7 @@ export class CreatedFamilyPage implements OnInit {
   }
 
   getRoleColor(role: string): string {
-    return role === 'owner'
-      ? 'primary'
-      : role === 'parent'
+    return role === 'owner' || role === 'parent'
       ? 'success'
       : role === 'companion'
       ? 'warning'

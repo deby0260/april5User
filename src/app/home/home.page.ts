@@ -1,14 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService, UserData } from '../services/auth';
-import { AlertController, ToastController } from '@ionic/angular';
+import { AlertController } from '@ionic/angular';
 import { HttpClient } from '@angular/common/http';
 import { FamilyService } from '../services/family.service';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
 import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
-import { Firestore, collection, query, where, getDocs, addDoc } from '@angular/fire/firestore';
+import { Firestore, collection, query, where, getDocs } from '@angular/fire/firestore';
 
 interface WeatherData {
   weather: Array<{
@@ -59,7 +59,6 @@ export class HomePage implements OnInit {
     private router: Router,
     private authService: AuthService,
     private alertController: AlertController,
-    private toastController: ToastController,
     private http: HttpClient,
     private familyService: FamilyService,
     private roleAccessService: RoleAccessService,
@@ -598,41 +597,6 @@ export class HomePage implements OnInit {
     this.router.navigate([route]);
   }
 
-  // Test method to create a sample schedule for debugging
-  async createTestSchedule() {
-    try {
-      if (!this.currentUser) return;
-
-      const family = await this.familyService.getUserFamily();
-      if (!family) return;
-
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowString = tomorrow.toISOString().split('T')[0];
-
-      const testSchedule = {
-        'Childs Grade': 'Grade 5',
-        'Childs Name': 'Test Child',
-        'Companions Name': this.currentUser.fullName || 'Test Fetcher',
-        'Date': tomorrowString,
-        'Parent Name': this.currentUser.fullName || 'Test Parent',
-        'Time': '3:00 PM',
-        'Family Name': family.name,
-        'Days': 'Tuesday',
-        'Fetcher UID': this.currentUser.uid,
-        'Creator UID': this.currentUser.uid,
-        'Created At': new Date()
-      };
-
-      const schedulesCollection = collection(this.firestore, 'Schedules');
-      await addDoc(schedulesCollection, testSchedule);
-
-      await this.loadUpcomingPickups(); // Reload data
-
-    } catch (error) {
-    }
-  }
-
   async triggerPanic() {
     await this.panicService.triggerPanicAlert();
   }
@@ -656,28 +620,5 @@ export class HomePage implements OnInit {
       ]
     });
     await alert.present();
-  }
-
-  // Test notification functionality (for development/testing)
-  async testNotification() {
-    try {
-      await this.notificationService.sendTestNotification();
-
-      const toast = await this.toastController.create({
-        message: 'Test notification sent. Check your notification tray.',
-        duration: 3000,
-        position: 'bottom',
-        color: 'success'
-      });
-      await toast.present();
-    } catch (error) {
-      const toast = await this.toastController.create({
-        message: 'Error sending test notification',
-        duration: 3000,
-        position: 'bottom',
-        color: 'danger'
-      });
-      await toast.present();
-    }
   }
 }

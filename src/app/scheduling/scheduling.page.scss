@@ -266,17 +266,35 @@
     }
   }
 
+  /* Match "Just this date" — no outer border/frame; only the ion-datetime grid. */
   .month-calendar-mount {
     margin-top: 14px;
-    border: 1.5px solid #129CAE;
-    border-radius: 14px;
-    background: #ffffff;
-    box-shadow: 0 2px 10px rgba(18, 156, 174, 0.10);
-    overflow: hidden;
 
     .month-inline-datetime {
       width: 100%;
-      --background: #ffffff;
+
+      /**
+       * Whole-month grid: each day must fill its cell so highlightedDates
+       * (teal / red tints from the TS callback) paint the full box, not a
+       * small circle floating in whitespace. The global calendar-day rule
+       * used border-radius: 9999px + background: transparent !important,
+       * which blocked inline highlight colors and shrank the hit area.
+       */
+      ion-datetime::part(calendar-day) {
+        width: 100%;
+        height: 100%;
+        min-height: 46px;
+        border-radius: 10px;
+        box-sizing: border-box;
+        background: transparent;
+      }
+
+      ion-datetime::part(calendar-day-active) {
+        border-radius: 10px;
+        width: 100%;
+        height: 100%;
+        min-height: 46px;
+      }
     }
   }
 
@@ -570,9 +588,10 @@
 
 /* 2) Shadow parts (Ion 7+) — day numbers */
 .custom-datetime ion-datetime::part(calendar-day) {
-  width: 44px;
-  height: 44px;
-  border-radius: 9999px;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  border-radius: 10px;
   font-size: 18px;
   font-weight: 800;
   display: inline-flex;
@@ -581,7 +600,9 @@
   letter-spacing: .2px;
   color: #000 !important;
   opacity: 1 !important;
-  background: transparent !important;
+  /* No !important — highlightedDates applies inline backgroundColor */
+  background: transparent;
+  box-sizing: border-box;
 }
 
 /* Disabled/unavailable dates (e.g. not matching chosen weekday) */
@@ -594,6 +615,10 @@
   color: #000 !important;
   box-shadow: inset 0 0 0 2px #117a8b;
   opacity: 1 !important;
+  border-radius: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
 }
 .custom-datetime ion-datetime::part(calendar-day-today) {
   background: #117a8b !important;

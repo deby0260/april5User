@@ -202,6 +202,55 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Fallback when Registerd has no `timeZone` (Cloud Functions run in UTC). */
+const DEFAULT_EMAIL_TIMEZONE = "Asia/Manila";
+
+function isValidIanaTimeZone(tz) {
+  if (typeof tz !== "string" || !tz.trim()) {
+    return false;
+  }
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz.trim() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getTimeZoneForUid(uid) {
+  if (!uid) {
+    return DEFAULT_EMAIL_TIMEZONE;
+  }
+  try {
+    const snap = await admin.firestore().doc(`Registerd/${uid}`).get();
+    const tz = snap.get("timeZone");
+    if (isValidIanaTimeZone(tz)) {
+      return String(tz).trim();
+    }
+  } catch {
+    // noop
+  }
+  return DEFAULT_EMAIL_TIMEZONE;
+}
+
+/** Format Firestore timestamps for email bodies in the recipient's local timezone. */
+function formatEmailDateTime(date, timeZone) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "Unknown time";
+  }
+  const tz = isValidIanaTimeZone(timeZone) ? String(timeZone).trim() : DEFAULT_EMAIL_TIMEZONE;
+  return date.toLocaleString("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
 async function getAuthEmailForUid(uid) {
   if (!uid || uid === "system" || uid === "system_auto" || uid === "auto") {
     return null;
@@ -268,7 +317,24 @@ function notificationKindLabel(typeRaw) {
   }
 }
 
-function buildNotificationEmailParts(data) {
+/** Plain-text body shared by email and SMS (timestamp, kind label, message). */
+function buildNotificationPlainBody(opts) {
+  const kind =
+    typeof opts.kind === "string" && opts.kind.trim() ? opts.kind.trim() : "Notification";
+  const title =
+    typeof opts.title === "string" && opts.title.trim() ? opts.title.trim() : "Notification";
+  const message =
+    typeof opts.message === "string" && opts.message.trim() ? opts.message.trim() : "";
+  const createdAt = opts.createdAt?.toDate
+    ? opts.createdAt.toDate()
+    : opts.createdAt
+      ? new Date(opts.createdAt)
+      : new Date();
+  const timeLabel = formatEmailDateTime(createdAt, opts.timeZone);
+  return `${timeLabel}\n\n${kind}\n\n${message || title}`;
+}
+
+function buildNotificationEmailParts(data, timeZone) {
   const kind = notificationKindLabel(data?.type);
   const title =
     typeof data?.title === "string" && data.title.trim() ? data.title.trim() : "Notification";
@@ -279,12 +345,15 @@ function buildNotificationEmailParts(data) {
     : data?.createdAt
       ? new Date(data.createdAt)
       : new Date();
-  const timeLabel =
-    createdAt instanceof Date && !Number.isNaN(createdAt.getTime())
-      ? createdAt.toLocaleString("en-US")
-      : "Unknown time";
+  const timeLabel = formatEmailDateTime(createdAt, timeZone);
+  const text = buildNotificationPlainBody({
+    kind,
+    title,
+    message,
+    createdAt: data?.createdAt,
+    timeZone,
+  });
   const subject = `FetchSafe: ${kind} — ${title}`;
-  const text = `${timeLabel}\n\n${kind}\n\n${message || title}`;
   const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p style="font-size:14px;color:#444;margin:0 0 10px 0;"><strong>${escapeHtml(kind)}</strong></p><p>${escapeHtml(message || title).replace(/\n/g, "<br/>")}</p>`;
   return { subject, text, html };
 }
@@ -309,7 +378,8 @@ async function trySendNotificationInboxEmail(recipientId, snap) {
   if (!to) {
     return { ok: false, reason: "no_auth_email" };
   }
-  const { subject, text, html } = buildNotificationEmailParts(data);
+  const timeZone = await getTimeZoneForUid(recipientId);
+  const { subject, text, html } = buildNotificationEmailParts(data, timeZone);
   await sendOneGmailMail(to, subject, text, html);
   await snap.ref.set({ emailedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true };
@@ -342,11 +412,20 @@ exports.sendSmsOnNotificationCreate = functions.firestore
       functions.logger.warn("SMS skipped: invalid contactNumber format", { recipientId });
       return null;
     }
-    const messageText =
+    const timeZone = await getTimeZoneForUid(recipientId);
+    const title =
+      typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Notification";
+    const message =
       (typeof data.message === "string" && data.message.trim()) ||
-      (typeof data.title === "string" && data.title.trim()) ||
+      title ||
       "You have an update in FetchSafe.";
-    const body = ` ${messageText}`;
+    const body = buildNotificationPlainBody({
+      kind: notificationKindLabel(type),
+      title,
+      message,
+      createdAt: data?.createdAt,
+      timeZone,
+    });
     try {
       const result = await sendOneIprogSms(iprog.apiToken, phone, body);
       functions.logger.info("IPROG SMS queued", { recipientId, type, phone, result });
@@ -364,7 +443,7 @@ exports.sendSmsOnAnnouncementCreate = functions.firestore
       typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Announcement";
     const bodyRaw =
       typeof data.body === "string" && data.body.trim() ? data.body.trim() : "";
-    const msg = bodyRaw ? `[FetchSafe] ${title}: ${bodyRaw}` : `[FetchSafe] ${title}`;
+    const createdAt = data?.createdAt;
     const iprog = getIprogConfig();
     if (!iprog) {
       return null;
@@ -390,6 +469,14 @@ exports.sendSmsOnAnnouncementCreate = functions.firestore
       if (!phone) {
         return null;
       }
+      const timeZone = await getTimeZoneForUid(uid);
+      const msg = buildNotificationPlainBody({
+        kind: "Announcement",
+        title,
+        message: bodyRaw || title,
+        createdAt,
+        timeZone,
+      });
       const result = await sendOneIprogSms(iprog.apiToken, phone, msg);
       functions.logger.info("IPROG announcement SMS queued", { uid, phone, result });
       return null;
@@ -434,14 +521,8 @@ exports.sendEmailOnAnnouncementCreate = onDocumentCreated(
       : data?.createdAt
         ? new Date(data.createdAt)
         : new Date();
-    const timeLabel =
-      createdAt instanceof Date && !Number.isNaN(createdAt.getTime())
-        ? createdAt.toLocaleString("en-US")
-        : "Unknown time";
     const kind = "Announcement";
     const subject = `FetchSafe: ${kind} — ${title}`;
-    const text = `${timeLabel}\n\n${kind}\n\n${bodyRaw || title}`;
-    const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p style="font-size:14px;color:#444;margin:0 0 10px 0;"><strong>${escapeHtml(kind)}</strong></p><p>${escapeHtml(bodyRaw || title).replace(/\n/g, "<br/>")}</p>`;
 
     const uids = await listSmsRecipientUids();
     if (!uids.length) {
@@ -456,6 +537,10 @@ exports.sendEmailOnAnnouncementCreate = onDocumentCreated(
       if (!enabled) {
         return null;
       }
+      const timeZone = await getTimeZoneForUid(uid);
+      const timeLabel = formatEmailDateTime(createdAt, timeZone);
+      const text = `${timeLabel}\n\n${kind}\n\n${bodyRaw || title}`;
+      const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p style="font-size:14px;color:#444;margin:0 0 10px 0;"><strong>${escapeHtml(kind)}</strong></p><p>${escapeHtml(bodyRaw || title).replace(/\n/g, "<br/>")}</p>`;
       const to = await getAuthEmailForUid(uid);
       if (!to) {
         return null;
@@ -619,10 +704,6 @@ exports.sendEmailOnScanEventCreate = onDocumentCreated(
       : data?.scannedAt
         ? new Date(data.scannedAt)
         : new Date();
-    const timeLabel =
-      scannedAt instanceof Date && !Number.isNaN(scannedAt.getTime())
-        ? scannedAt.toLocaleString("en-US")
-        : "Unknown time";
     if (!familyName) {
       return;
     }
@@ -657,10 +738,12 @@ exports.sendEmailOnScanEventCreate = onDocumentCreated(
       const subtitle = who ? `By: ${who}` : "";
       const subject = `FetchSafe: School — ${title}`;
       const body = [subtitle, `Family: ${familyName}`].filter(Boolean).join("\n");
-      const text = `${timeLabel}\n\nSchool\n\n${title}\n${body}`.trim();
       const htmlBody = escapeHtml([title, body].filter(Boolean).join("\n")).replace(/\n/g, "<br/>");
-      const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p style="font-size:14px;color:#444;margin:0 0 10px 0;"><strong>School</strong></p><p>${htmlBody}</p>`;
       for (const r of recipients) {
+        const timeZone = await getTimeZoneForUid(r.uid);
+        const timeLabel = formatEmailDateTime(scannedAt, timeZone);
+        const text = `${timeLabel}\n\nSchool\n\n${title}\n${body}`.trim();
+        const html = `<p><strong>${escapeHtml(timeLabel)}</strong></p><p style="font-size:14px;color:#444;margin:0 0 10px 0;"><strong>School</strong></p><p>${htmlBody}</p>`;
         try {
           await sendOneGmailMail(r.email, subject, text, html);
         } catch (e) {

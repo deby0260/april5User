@@ -31,6 +31,7 @@ export class AuthService {
     private firestore: Firestore,
     private auth: FirebaseAuth
   ) {
+    this.loadCurrentUser();
   }
 
   private getFriendlyAuthErrorMessage(error: any, fallback: string): string {
@@ -77,7 +78,7 @@ export class AuthService {
       // Use setDoc with doc() to create a document with UID as the document ID
       const userDocRef = doc(this.firestore, 'Registerd', uid);
       await setDoc(userDocRef, userDataWithUid);
-
+      await this.syncDeviceTimeZoneToProfile(uid);
 
       await signOut(this.auth);
 
@@ -143,7 +144,8 @@ export class AuthService {
         // Store user data in localStorage and BehaviorSubject
         localStorage.setItem('currentUser', JSON.stringify(userData));
         this.currentUserSubject.next(userData);
-        
+        void this.syncDeviceTimeZoneToProfile(uid);
+
         // Check if this is a verified parent who needs to change password
         await this.checkAndNotifyVerifiedParent(userData);
 
@@ -181,6 +183,96 @@ export class AuthService {
 
   getCurrentUser(): UserData | null {
     return this.currentUserSubject.value;
+  }
+
+  /** Merges latest Registerd fields into the active session (e.g. after settings edit). */
+  async reloadCurrentUserFromFirestore(): Promise<UserData | null> {
+    const user = this.getCurrentUser();
+    if (!user?.uid) {
+      return null;
+    }
+    try {
+      const snap = await getDoc(doc(this.firestore, 'Registerd', user.uid));
+      if (!snap.exists()) {
+        return user;
+      }
+      const merged: UserData = { ...user, ...(snap.data() as UserData), uid: user.uid };
+      localStorage.setItem('currentUser', JSON.stringify(merged));
+      this.currentUserSubject.next(merged);
+      return merged;
+    } catch {
+      return user;
+    }
+  }
+
+  /** Updates Registerd profile fields and refreshes the in-app session. */
+  async updateProfile(updates: {
+    fullName?: string;
+    contactNumber?: string;
+    profilePicture?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const user = this.getCurrentUser();
+    if (!user?.uid) {
+      return { success: false, message: 'Please log in first.' };
+    }
+
+    const fullName = updates.fullName !== undefined ? updates.fullName.trim() : user.fullName;
+    const contactNumber =
+      updates.contactNumber !== undefined ? updates.contactNumber.trim() : user.contactNumber;
+
+    if (!fullName) {
+      return { success: false, message: 'Full name is required.' };
+    }
+    if (!contactNumber) {
+      return { success: false, message: 'Contact number is required.' };
+    }
+    if (!/^\d{11}$/.test(contactNumber)) {
+      return { success: false, message: 'Contact number must be exactly 11 digits.' };
+    }
+
+    try {
+      const patch: Record<string, string> = { fullName, contactNumber };
+      if (updates.profilePicture !== undefined) {
+        patch['profilePicture'] = updates.profilePicture;
+      }
+
+      await setDoc(doc(this.firestore, 'Registerd', user.uid), patch, { merge: true });
+
+      const merged: UserData = {
+        ...user,
+        fullName,
+        contactNumber,
+        ...(updates.profilePicture !== undefined
+          ? { profilePicture: updates.profilePicture }
+          : {}),
+      };
+      localStorage.setItem('currentUser', JSON.stringify(merged));
+      this.currentUserSubject.next(merged);
+      return { success: true, message: 'Profile updated successfully.' };
+    } catch {
+      return { success: false, message: 'Failed to update profile. Please try again.' };
+    }
+  }
+
+  /** Saves device IANA timezone so notification emails show local time (Cloud Functions). */
+  async syncDeviceTimeZoneToProfile(uid?: string): Promise<void> {
+    const id = uid ?? this.getCurrentUser()?.uid;
+    if (!id) {
+      return;
+    }
+    try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!timeZone?.trim()) {
+        return;
+      }
+      await setDoc(
+        doc(this.firestore, 'Registerd', id),
+        { timeZone: timeZone.trim() },
+        { merge: true }
+      );
+    } catch {
+      // noop
+    }
   }
 
   isLoggedIn(): boolean {
@@ -321,6 +413,7 @@ export class AuthService {
       // Store user data in localStorage and BehaviorSubject
       localStorage.setItem('currentUser', JSON.stringify(userData));
       this.currentUserSubject.next(userData);
+      void this.syncDeviceTimeZoneToProfile(userData.uid);
 
       // Check if this is a verified parent who needs to change password
       await this.checkAndNotifyVerifiedParent(userData);

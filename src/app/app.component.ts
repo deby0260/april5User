@@ -4,6 +4,8 @@ import { Platform } from '@ionic/angular';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import { NotificationService } from './services/notification.service';
+import { AuthService, UserData } from './services/auth';
+import { NotificationFeedsBackgroundService } from './services/notification-feeds-background.service';
 
 @Component({
   selector: 'app-root',
@@ -32,6 +34,8 @@ export class AppComponent implements OnInit, OnDestroy {
   constructor(
     private platform: Platform,
     private notificationService: NotificationService,
+    private authService: AuthService,
+    private notificationFeedsBackground: NotificationFeedsBackgroundService,
     private router: Router
   ) {
     this.refreshAppChrome(this.router.url);
@@ -48,6 +52,18 @@ export class AppComponent implements OnInit, OnDestroy {
   async ngOnInit() {
     await this.platform.ready();
     await this.initializeNotifications();
+    this.authService.currentUser$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((user: UserData | null) => {
+        if (user?.uid) {
+          void this.notificationFeedsBackground.ensureRunning();
+        } else {
+          this.notificationFeedsBackground.stop();
+        }
+      });
+    if (this.authService.getCurrentUser()?.uid) {
+      void this.notificationFeedsBackground.ensureRunning();
+    }
   }
 
   ngOnDestroy(): void {

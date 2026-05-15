@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { AuthService } from '../services/auth';
 import { LoadingController, AlertController, ToastController } from '@ionic/angular';
-import { NotificationService } from '../services/notification.service';
+import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
 
 @Component({
   selector: 'app-login',
@@ -26,7 +26,7 @@ export class LoginPage implements OnInit {
     private loadingController: LoadingController,
     private alertController: AlertController,
     private toastController: ToastController,
-    private notificationService: NotificationService
+    private notificationFeedsBackground: NotificationFeedsBackgroundService
   ) { }
 
   ngOnInit() {
@@ -58,7 +58,7 @@ export class LoginPage implements OnInit {
 
         await this.showToast('Login successful!', 'success');
 
-        void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: true });
+        void this.notificationFeedsBackground.ensureRunning();
 
         this.router.navigate(['/home']);
       } else {

@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { Functions, httpsCallable } from '@angular/fire/functions';
 import { environment } from '../../environments/environment';
+import { NotificationPreferencesService } from './notification-preferences.service';
 
-const SETTINGS_KEY = 'fetchsafe-settings';
 const SENT_IDS_KEY = 'fetchsafe-emailed-notification-ids';
 const MAX_STORED_IDS = 800;
 
@@ -19,19 +19,13 @@ export interface EmailableNotificationItem {
   providedIn: 'root',
 })
 export class NotificationEmailForwardService {
-  constructor(private functions: Functions) {}
+  constructor(
+    private functions: Functions,
+    private notificationPreferences: NotificationPreferencesService
+  ) {}
 
   isEmailForwardingEnabled(): boolean {
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) {
-        return false;
-      }
-      const parsed = JSON.parse(raw) as { emailNotifications?: boolean };
-      return parsed.emailNotifications === true;
-    } catch {
-      return false;
-    }
+    return this.notificationPreferences.isEmailNotificationsEnabled();
   }
 
   /**

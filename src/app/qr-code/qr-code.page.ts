@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
-import { LoadingController, ToastController } from '@ionic/angular';
+import { ToastController } from '@ionic/angular';
 import { AuthService, UserData } from '../services/auth';
 import { FamilyService } from '../services/family.service';
 
@@ -47,7 +47,6 @@ export class QrCodePage implements OnInit {
     private afs: Firestore,
     private authService: AuthService,
     private familyService: FamilyService,
-    private loadingController: LoadingController,
     private toastController: ToastController
   ) {}
 
@@ -222,11 +221,6 @@ export class QrCodePage implements OnInit {
     if (!this.currentUser) return;
 
     this.isLoading = true;
-    const loading = await this.loadingController.create({
-      message: 'Generating Family QR Code...',
-      spinner: 'crescent',
-    });
-    await loading.present();
 
     try {
       const familyName = await this.findFamilyNameForCurrentUser();
@@ -273,7 +267,6 @@ export class QrCodePage implements OnInit {
       }
     } finally {
       this.isLoading = false;
-      await loading.dismiss();
     }
   }
 

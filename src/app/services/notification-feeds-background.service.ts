@@ -1,26 +1,35 @@
 import { Injectable } from '@angular/core';
+import { Subscription } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 import { AuthService } from './auth';
 import { FamilyService } from './family.service';
-import { NotificationInboxFeedService } from './notification-inbox-feed.service';
+import { NotificationInboxFeedService, InboxFeedItem } from './notification-inbox-feed.service';
 import { PickupNotificationLogLoaderService } from './pickup-notification-log-loader.service';
+import { NotificationService } from './notification.service';
+import { NotificationEmailForwardService } from './notification-email-forward.service';
+import { NotificationPreferencesService } from './notification-preferences.service';
 
 /**
  * Starts background Firestore listeners + cache hydration for:
  * - Notifications inbox (`NotificationInboxFeedService`)
  * - Pick Up Log (`PickupNotificationLogLoaderService`)
  *
- * Invoked from shell chrome (e.g. bottom navigation) so data is already loading
- * before the user opens those routes.
+ * Invoked from app shell on login so inbox, pickup log, email forward, and
+ * pickup reminders run without opening Notifications / Pick Up Log routes.
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationFeedsBackgroundService {
   private lastUid: string | null = null;
+  private inboxEmailForwardSub: Subscription | null = null;
 
   constructor(
     private authService: AuthService,
     private familyService: FamilyService,
     private inboxFeed: NotificationInboxFeedService,
-    private pickupLogLoader: PickupNotificationLogLoaderService
+    private pickupLogLoader: PickupNotificationLogLoaderService,
+    private notificationService: NotificationService,
+    private emailForward: NotificationEmailForwardService,
+    private notificationPreferences: NotificationPreferencesService
   ) {}
 
   /**
@@ -35,9 +44,17 @@ export class NotificationFeedsBackgroundService {
     if (this.lastUid !== u.uid) {
       this.lastUid = u.uid;
       this.inboxFeed.start(u.uid);
+      this.attachInboxEmailForward();
     }
 
+    await this.notificationPreferences.syncFromFirestore();
+    await this.notificationService.syncAppNotificationPreference(
+      this.notificationPreferences.isAppNotificationsEnabled()
+    );
+    void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: false });
+
     await this.inboxFeed.refresh();
+    await this.forwardInboxEmails(this.inboxFeed.inbox$.value);
 
     try {
       const family = await this.familyService.getUserFamily();
@@ -53,7 +70,48 @@ export class NotificationFeedsBackgroundService {
 
   stop(): void {
     this.lastUid = null;
+    if (this.inboxEmailForwardSub) {
+      this.inboxEmailForwardSub.unsubscribe();
+      this.inboxEmailForwardSub = null;
+    }
     this.inboxFeed.stop();
     this.pickupLogLoader.stop();
+  }
+
+  private attachInboxEmailForward(): void {
+    if (this.inboxEmailForwardSub) {
+      return;
+    }
+    this.inboxEmailForwardSub = this.inboxFeed.inbox$
+      .pipe(
+        debounceTime(600),
+        filter((list) => list.length > 0)
+      )
+      .subscribe((list) => void this.forwardInboxEmails(list));
+  }
+
+  private async forwardInboxEmails(list: InboxFeedItem[]): Promise<void> {
+    if (!this.emailForward.isEmailForwardingEnabled()) {
+      return;
+    }
+    const user = this.authService.getCurrentUser();
+    if (!user?.email) {
+      return;
+    }
+    const emailable = list.filter(
+      (n) => n.id && n.type !== 'admin_announcement'
+    );
+    if (emailable.length === 0) {
+      return;
+    }
+    await this.emailForward.forwardNewNotifications(
+      emailable.map((n) => ({
+        id: n.id,
+        title: n.title,
+        displayMessage: n.message,
+        time: n.time,
+        type: n.type,
+      }))
+    );
   }
 }
