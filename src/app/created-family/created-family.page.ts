@@ -138,7 +138,6 @@ export class CreatedFamilyPage implements OnInit {
         snap = await getDocs(q);
       }
 
-      const children: Child[] = [];
       let effectiveFamilyName = family.name;
       let earliestDate: Date | null = null;
       const membersFromDocs: FamilyMember[] = [];
@@ -152,17 +151,6 @@ export class CreatedFamilyPage implements OnInit {
 
         const createdAt = this.toJsDate(this.pick(data, 'Date Created', 'dateCreated'));
         if (createdAt && (!earliestDate || createdAt < earliestDate)) earliestDate = createdAt;
-
-        const childName = this.pick(data, 'Childs Name', 'childsName', 'childName', 'Child Name');
-        if (childName) {
-          children.push({
-            name: childName,
-            gradeLevel: this.pick(data, 'Grade Level', 'gradeLevel') || '',
-            profilePicture: this.pick(data, 'Child Profile Picture', 'childProfilePicture') || '',
-            dateCreated: createdAt,
-            isVerified: !!this.pick(data, 'Child Verified', 'childVerified')
-          });
-        }
 
         const parentName = this.pick(data, 'Parent Full Name', 'parentFullName', 'nameOfTheCreator');
         const parentEmail = this.pick(data, 'Parent Email', 'parentEmail');
@@ -185,6 +173,18 @@ export class CreatedFamilyPage implements OnInit {
           });
         }
       });
+
+      const childrenRecords = await this.familyService.getFamilyChildren(
+        effectiveFamilyName,
+        currentUser.uid
+      );
+      const children: Child[] = childrenRecords.map((c) => ({
+        name: c.name,
+        gradeLevel: c.grade || '',
+        profilePicture: c.profilePicture || '',
+        dateCreated: earliestDate,
+        isVerified: !!c.isVerified
+      }));
 
       const svcMembers = await this.familyService.getFamilyMembers(effectiveFamilyName);
 

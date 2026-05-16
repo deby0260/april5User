@@ -22,6 +22,13 @@ export interface Family {
   createdBy: string; 
 }
 
+export interface FamilyChildRecord {
+  name: string;
+  grade: string;
+  profilePicture: string;
+  isVerified?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -604,37 +611,262 @@ export class FamilyService {
     }
   }
 
-  async getFamilyChildren(familyName: string): Promise<any[]> {
+  private pickFamilyField<T = unknown>(obj: Record<string, unknown>, ...keys: string[]): T | undefined {
+    for (const k of keys) {
+      const v = obj?.[k];
+      if (v !== undefined && v !== null && v !== '') return v as T;
+    }
+    return undefined;
+  }
+
+  private splitChildNames(raw: string): string[] {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+    return text
+      .split(/[,;|\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  private gradeForIndexedChild(data: Record<string, unknown>, index: string): string {
+    const idx = String(index || '').trim();
+    if (!idx) return '';
+    return String(
+      this.pickFamilyField(
+        data,
+        `Grade Level ${idx}`,
+        `Child ${idx} Grade Level`,
+        `Child Grade Level ${idx}`,
+        `gradeLevel${idx}`
+      ) || ''
+    );
+  }
+
+  private photoForIndexedChild(data: Record<string, unknown>, index: string): string {
+    const idx = String(index || '').trim();
+    if (!idx) return '';
+    return String(
+      this.pickFamilyField(
+        data,
+        `Child ${idx} Profile Picture`,
+        `Child Profile Picture ${idx}`,
+        `childProfilePicture${idx}`,
+        `Child Profile Picture ${idx}`
+      ) || ''
+    );
+  }
+
+  /**
+   * A family document may represent one child (scalar fields) or several
+   * (array, comma-separated names, or numbered fields like "Childs Name 2").
+   */
+  extractChildrenFromFamilyDoc(data: Record<string, unknown>): FamilyChildRecord[] {
+    const results: FamilyChildRecord[] = [];
+    const seen = new Set<string>();
+
+    const addChild = (
+      name: string,
+      grade = '',
+      profilePicture = '',
+      isVerified?: boolean
+    ) => {
+      const trimmed = String(name || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push({
+        name: trimmed,
+        grade: String(grade || ''),
+        profilePicture: String(profilePicture || ''),
+        ...(isVerified !== undefined ? { isVerified } : {}),
+      });
+    };
+
+    const arrayFields = ['children', 'Children', 'childList', 'Child List', 'kids'];
+    for (const field of arrayFields) {
+      const arr = data[field];
+      if (!Array.isArray(arr)) continue;
+      for (const item of arr) {
+        if (typeof item === 'string') {
+          this.splitChildNames(item).forEach((n) => addChild(n));
+        } else if (item && typeof item === 'object') {
+          const row = item as Record<string, unknown>;
+          addChild(
+            String(
+              this.pickFamilyField(row, 'name', 'childName', 'Childs Name', 'Child Name', 'fullName') || ''
+            ),
+            String(this.pickFamilyField(row, 'grade', 'gradeLevel', 'Grade Level', 'Grade') || ''),
+            String(
+              this.pickFamilyField(
+                row,
+                'profilePicture',
+                'childProfilePicture',
+                'Child Profile Picture'
+              ) || ''
+            ),
+            !!this.pickFamilyField(row, 'Child Verified', 'childVerified', 'isVerified')
+          );
+        }
+      }
+    }
+
+    const primaryName = this.pickFamilyField<string>(
+      data,
+      'Childs Name',
+      'childsName',
+      'childName',
+      'Child Name'
+    );
+    const primaryGrade = String(
+      this.pickFamilyField(data, 'Grade Level', 'gradeLevel', 'Child Grade') || ''
+    );
+    const primaryPhoto = String(
+      this.pickFamilyField(data, 'Child Profile Picture', 'childProfilePicture') || ''
+    );
+    const primaryVerified = !!this.pickFamilyField(data, 'Child Verified', 'childVerified');
+
+    if (primaryName) {
+      const names = this.splitChildNames(String(primaryName));
+      if (names.length > 1) {
+        names.forEach((n) => addChild(n, primaryGrade, primaryPhoto, primaryVerified));
+      } else {
+        addChild(String(primaryName), primaryGrade, primaryPhoto, primaryVerified);
+      }
+    }
+
+    const secondaryName = this.pickFamilyField<string>(
+      data,
+      'Second Childs Name',
+      'Second Child Name',
+      'Child 2 Name',
+      'child2Name',
+      'Child2 Name'
+    );
+    if (secondaryName) {
+      addChild(
+        String(secondaryName),
+        String(
+          this.pickFamilyField(
+            data,
+            'Second Child Grade Level',
+            'Grade Level 2',
+            'Child 2 Grade Level',
+            'gradeLevel2'
+          ) || ''
+        ),
+        String(
+          this.pickFamilyField(
+            data,
+            'Second Child Profile Picture',
+            'Child 2 Profile Picture',
+            'Child Profile Picture 2',
+            'childProfilePicture2'
+          ) || ''
+        )
+      );
+    }
+
+    for (const [key, value] of Object.entries(data)) {
+      if (value === null || value === undefined) continue;
+
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        if (/^child\s*\d+$/i.test(key) || /^child\d+$/i.test(key)) {
+          const row = value as Record<string, unknown>;
+          addChild(
+            String(
+              this.pickFamilyField(row, 'name', 'childName', 'Childs Name', 'Child Name', 'fullName') ||
+                ''
+            ),
+            String(this.pickFamilyField(row, 'grade', 'gradeLevel', 'Grade Level', 'Grade') || ''),
+            String(
+              this.pickFamilyField(
+                row,
+                'profilePicture',
+                'childProfilePicture',
+                'Child Profile Picture'
+              ) || ''
+            ),
+            !!this.pickFamilyField(row, 'Child Verified', 'childVerified', 'isVerified')
+          );
+        }
+        continue;
+      }
+
+      const strVal = String(value).trim();
+      if (!strVal) continue;
+
+      let index = '';
+      const indexedPatterns: RegExp[] = [
+        /^Childs?\s*Name\s*(\d+)$/i,
+        /^Child\s*Name\s*(\d+)$/i,
+        /^childsName(\d+)$/i,
+        /^childName(\d+)$/i,
+        /^Child\s*(\d+)\s*Name$/i,
+      ];
+      let matched = false;
+      for (const pattern of indexedPatterns) {
+        const m = key.match(pattern);
+        if (m) {
+          index = m[1] || '';
+          matched = true;
+          break;
+        }
+      }
+      if (!matched || !index) continue;
+
+      addChild(
+        strVal,
+        this.gradeForIndexedChild(data, index),
+        this.photoForIndexedChild(data, index)
+      );
+    }
+
+    return results;
+  }
+
+  async getFamilyChildren(familyName: string, parentUid?: string): Promise<FamilyChildRecord[]> {
     try {
       const familiesCollection = collection(this.firestore, 'List Of Families');
+      const docById = new Map<string, Record<string, unknown>>();
 
-      // Try querying with 'Family Name' first (new format)
+      const addSnapshot = (snap: { docs: { id: string; data: () => Record<string, unknown> }[] }) => {
+        snap.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const docFamily = String(data['Family Name'] || data['familyName'] || '').trim();
+          if (familyName && docFamily && docFamily !== familyName) return;
+          docById.set(docSnap.id, data);
+        });
+      };
+
       let q = query(familiesCollection, where('Family Name', '==', familyName));
       let querySnapshot = await getDocs(q);
+      addSnapshot(querySnapshot);
 
-      // If no results, try with 'familyName' (old format)
       if (querySnapshot.empty) {
         q = query(familiesCollection, where('familyName', '==', familyName));
         querySnapshot = await getDocs(q);
+        addSnapshot(querySnapshot);
       }
 
-      const children: any[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      if (parentUid) {
+        const uidSnap = await getDocs(
+          query(familiesCollection, where('uid', '==', parentUid))
+        );
+        addSnapshot(uidSnap);
+      }
 
-        // Check for child name in multiple possible field formats
-        const childName = data['Childs Name'] || data['childsName'] || data['childName'] || data['Child Name'] || '';
+      const children: FamilyChildRecord[] = [];
+      const seenNames = new Set<string>();
 
-        if (childName && childName.trim() !== '') {
-          const child = {
-            name: childName,
-            grade: data['Grade Level'] || data['gradeLevel'] || '',
-            profilePicture: data['Child Profile Picture'] || data['childProfilePicture'] || ''
-          };
+      for (const data of docById.values()) {
+        for (const child of this.extractChildrenFromFamilyDoc(data)) {
+          const key = child.name.toLowerCase();
+          if (seenNames.has(key)) continue;
+          seenNames.add(key);
           children.push(child);
-        } else {
         }
-      });
+      }
 
       return children;
     } catch (error) {
