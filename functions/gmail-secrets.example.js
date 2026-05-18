@@ -11,6 +11,7 @@
  *
  * New `Announcements` docs trigger `sendEmailOnAnnouncementCreate` (broadcast to users with email on).
  * Turning on `Registerd.emailNotifications` triggers `sendPendingNotificationEmailsOnEmailOptIn` for pending inbox rows.
+ * Callable `requestPasswordReset` sends password reset links from fetchsafe.notification@gmail.com.
  * Deploy binds secrets to the v2 email functions automatically when prompted, or use:
  *   firebase deploy --only functions
  */

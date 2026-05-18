@@ -1,8 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Auth, sendPasswordResetEmail, fetchSignInMethodsForEmail } from '@angular/fire/auth';
 import { LoadingController, AlertController, ToastController } from '@ionic/angular';
 import { Firestore, collection, query, where, getDocs } from '@angular/fire/firestore';
+import { PasswordResetService } from '../services/password-reset.service';
 
 @Component({
   selector: 'app-forgot-password',
@@ -10,18 +10,18 @@ import { Firestore, collection, query, where, getDocs } from '@angular/fire/fire
   styleUrls: ['./forgot-password.page.scss'],
   standalone: false
 })
-export class ForgotPasswordPage implements OnInit {
+export class ForgotPasswordPage implements OnInit, OnDestroy {
   email: string = '';
   emailError: string = '';
   isLoading: boolean = false;
   resetSent: boolean = false;
   countdown: number = 0;
-  countdownInterval: any;
+  countdownInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private router: Router,
-    private auth: Auth,
     private firestore: Firestore,
+    private passwordResetService: PasswordResetService,
     private loadingController: LoadingController,
     private alertController: AlertController,
     private toastController: ToastController
@@ -43,20 +43,17 @@ export class ForgotPasswordPage implements OnInit {
 
   async checkEmailExists(email: string): Promise<boolean> {
     try {
-
       const usersCollection = collection(this.firestore, 'Registerd');
       const emailQuery = query(usersCollection, where('email', '==', email));
       const querySnapshot = await getDocs(emailQuery);
-
       return !querySnapshot.empty;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
 
   async sendResetLink() {
     this.emailError = '';
-
 
     if (!this.email.trim()) {
       this.emailError = 'Email is required';
@@ -68,13 +65,12 @@ export class ForgotPasswordPage implements OnInit {
       return;
     }
 
-
     if (this.countdown > 0) {
       this.emailError = `Please wait ${this.countdown} seconds before requesting another reset link`;
       return;
     }
 
-
+    this.isLoading = true;
     const loading = await this.loadingController.create({
       message: 'Checking email and sending reset link...',
       spinner: 'crescent'
@@ -82,48 +78,35 @@ export class ForgotPasswordPage implements OnInit {
     await loading.present();
 
     try {
-
-      const emailExists = await this.checkEmailExists(this.email);
+      const trimmedEmail = this.email.trim();
+      const emailExists = await this.checkEmailExists(trimmedEmail);
       if (!emailExists) {
-        await loading.dismiss();
         this.emailError = 'No account found with this email address. Please check your email or create a new account.';
         await this.showToast('Email not found in our system', 'danger');
         return;
       }
 
+      const result = await this.passwordResetService.requestPasswordReset(trimmedEmail);
+      if (!result.success) {
+        this.emailError = result.message;
+        await this.showToast(result.message, 'danger');
+        return;
+      }
 
-      await sendPasswordResetEmail(this.auth, this.email);
-
-      await loading.dismiss();
       this.resetSent = true;
-
-
-      this.startCountdown(60); 
-
+      this.startCountdown(60);
 
       await this.showAlert(
         'Reset link sent',
-        `A password reset link has been sent to ${this.email}. Please check your inbox (and spam folder) and follow the instructions to reset your password.\n\nThe link will expire in 1 hour.`
+        `A password reset link has been sent to ${trimmedEmail} from FetchSafe. Please check your inbox (and spam folder) and follow the instructions to reset your password.\n\nThe link will expire in about 1 hour.`
       );
-
-    } catch (error: any) {
-      await loading.dismiss();
-
-      let errorMessage = 'Failed to send reset link. Please try again.';
-
-
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email address. Please check your email or create a new account.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Please enter a valid email address.';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many requests. Please try again later.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
-      }
-
+    } catch {
+      const errorMessage = 'Failed to send reset link. Please try again.';
       this.emailError = errorMessage;
       await this.showToast(errorMessage, 'danger');
+    } finally {
+      this.isLoading = false;
+      await loading.dismiss();
     }
   }
 
@@ -131,8 +114,9 @@ export class ForgotPasswordPage implements OnInit {
     this.countdown = seconds;
     this.countdownInterval = setInterval(() => {
       this.countdown--;
-      if (this.countdown <= 0) {
+      if (this.countdown <= 0 && this.countdownInterval) {
         clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
         this.countdown = 0;
       }
     }, 1000);
@@ -162,7 +146,7 @@ export class ForgotPasswordPage implements OnInit {
       await this.showToast(`Please wait ${this.countdown} seconds before resending`, 'warning');
       return;
     }
-
+    this.resetSent = false;
     await this.sendResetLink();
   }
 

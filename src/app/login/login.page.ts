@@ -110,7 +110,8 @@ export class LoginPage implements OnInit {
     this.router.navigate(['/register']);
   }
 
-  goToForgotPassword() {
+  goToForgotPassword(event?: Event) {
+    event?.preventDefault();
     this.router.navigate(['/forgot-password']);
   }
 }

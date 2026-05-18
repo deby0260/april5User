@@ -764,6 +764,159 @@ exports.sendEmailOnScanEventCreate = onDocumentCreated(
   }
 );
 
+function normalizeEmailInput(email) {
+  return String(email || "").trim();
+}
+
+function isValidEmailFormat(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+async function findRegisterdDocByEmail(email) {
+  const snap = await admin
+    .firestore()
+    .collection("Registerd")
+    .where("email", "==", email)
+    .limit(1)
+    .get();
+  if (snap.empty) {
+    return null;
+  }
+  const docSnap = snap.docs[0];
+  return { uid: docSnap.id, data: docSnap.data() };
+}
+
+async function ensureFirebaseAuthUser(email, registerd) {
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    return existing.uid;
+  } catch (e) {
+    if (e?.code !== "auth/user-not-found") {
+      throw e;
+    }
+  }
+  const password = registerd.data?.password;
+  if (typeof password !== "string" || !password.length) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This account cannot be reset online. Please contact the administrator."
+    );
+  }
+  const createParams = {
+    email,
+    password,
+    emailVerified: false,
+  };
+  if (registerd.uid) {
+    createParams.uid = registerd.uid;
+  }
+  try {
+    const created = await admin.auth().createUser(createParams);
+    return created.uid;
+  } catch (createErr) {
+    if (
+      createErr?.code === "auth/uid-already-exists" ||
+      createErr?.code === "auth/email-already-exists"
+    ) {
+      const existing = await admin.auth().getUserByEmail(email);
+      return existing.uid;
+    }
+    throw createErr;
+  }
+}
+
+function buildPasswordResetEmailHtml(resetLink) {
+  const safeLink = escapeHtml(resetLink);
+  return (
+    `<p>You requested a password reset for your FetchSafe account.</p>` +
+    `<p><a href="${safeLink}" style="display:inline-block;padding:12px 24px;background:#20b2aa;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">Reset password</a></p>` +
+    `<p>Or copy this link into your browser:</p>` +
+    `<p style="word-break:break-all;"><a href="${safeLink}">${safeLink}</a></p>` +
+    `<p>This link expires in about 1 hour. If you did not request this, you can ignore this email.</p>`
+  );
+}
+
+/**
+ * Callable: send password reset link via Gmail (fetchsafe.notification@gmail.com).
+ * Verifies email exists in Registerd, ensures Firebase Auth user, then emails reset link.
+ */
+exports.requestPasswordReset = onCall(
+  {
+    region: "us-central1",
+    secrets: [gmailUser, gmailAppPassword],
+    /** Callable is used while logged out; must allow unauthenticated Cloud Run invoke. */
+    invoker: "public",
+    cors: [
+      /^https?:\/\/localhost(:\d+)?$/,
+      /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+      /\.firebaseapp\.com$/,
+      /\.web\.app$/,
+    ],
+  },
+  async (request) => {
+    const email = normalizeEmailInput(request.data?.email);
+    const continueUrl = String(request.data?.continueUrl || "").trim();
+
+    if (!email || !isValidEmailFormat(email)) {
+      throw new HttpsError("invalid-argument", "Please enter a valid email address.");
+    }
+    if (!continueUrl || !/^https?:\/\//i.test(continueUrl)) {
+      throw new HttpsError("invalid-argument", "Invalid reset URL.");
+    }
+
+    const registerd = await findRegisterdDocByEmail(email);
+    if (!registerd) {
+      throw new HttpsError(
+        "not-found",
+        "No account found with this email address. Please check your email or create a new account."
+      );
+    }
+
+    try {
+      createGmailTransporter();
+    } catch {
+      throw new HttpsError(
+        "failed-precondition",
+        "Email is not configured on the server (GMAIL_USER and GMAIL_APP_PASSWORD secrets)."
+      );
+    }
+
+    await ensureFirebaseAuthUser(email, registerd);
+
+    const actionCodeSettings = {
+      url: continueUrl,
+      handleCodeInApp: true,
+    };
+
+    let resetLink;
+    try {
+      resetLink = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
+    } catch (e) {
+      functions.logger.error("generatePasswordResetLink failed", {
+        email,
+        err: String(e),
+      });
+      throw new HttpsError("internal", "Failed to create reset link. Please try again.");
+    }
+
+    const subject = "FetchSafe: Reset your password";
+    const text =
+      `You requested a password reset for your FetchSafe account.\n\n` +
+      `Reset your password: ${resetLink}\n\n` +
+      `This link expires in about 1 hour. If you did not request this, you can ignore this email.`;
+    const html = buildPasswordResetEmailHtml(resetLink);
+
+    try {
+      await sendOneGmailMail(email, subject, text, html);
+    } catch (e) {
+      functions.logger.error("Password reset email failed", { email, err: String(e) });
+      throw new HttpsError("internal", "Failed to send reset email. Please try again later.");
+    }
+
+    return { success: true };
+  }
+);
+
 /**
  * Callable: same contract as before — one email per item, `{ emailedIds }`.
  * Uses Gmail SMTP (secrets on server only).

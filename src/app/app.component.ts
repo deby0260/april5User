@@ -83,7 +83,8 @@ export class AppComponent implements OnInit, OnDestroy {
       path === '/home-screen' ||
       path === '/login' ||
       path === '/register' ||
-      path === '/forgot-password';
+      path === '/forgot-password' ||
+      path === '/reset-password';
 
     this.showAppChrome = !hide;
     this.shellHeaderLayout = !hide && this.shellBackRoutes.has(path) ? 'with-back' : 'main';
