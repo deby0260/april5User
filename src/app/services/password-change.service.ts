@@ -1,7 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, doc, updateDoc, query, where, getDocs, addDoc, serverTimestamp } from '@angular/fire/firestore';
 import { AuthService } from './auth';
-import { Auth as FirebaseAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from '@angular/fire/auth';
+import {
+  Auth as FirebaseAuth,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  signInWithEmailAndPassword,
+  updatePassword,
+} from '@angular/fire/auth';
 
 export interface PasswordChangeNotification {
   id?: string;
@@ -69,61 +75,97 @@ export class PasswordChangeService {
   }
 
   /**
-   * Change the parent's password (one-time only)
+   * Sync Firebase Auth password when possible (verified-parent modal has no "current password" field).
+   */
+  private async syncFirebaseAuthPassword(
+    email: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    let firebaseUser = this.auth.currentUser;
+
+    if (!firebaseUser && email && currentPassword) {
+      try {
+        const cred = await signInWithEmailAndPassword(this.auth, email, currentPassword);
+        firebaseUser = cred.user;
+      } catch (e: any) {
+        const code = String(e?.code || '');
+        if (code.includes('auth/user-not-found') || code.includes('auth/invalid-credential')) {
+          return { ok: true };
+        }
+        return { ok: false, message: 'Could not update login password. Please try again.' };
+      }
+    }
+
+    if (!firebaseUser?.email) {
+      return { ok: true };
+    }
+
+    try {
+      await updatePassword(firebaseUser, newPassword);
+      return { ok: true };
+    } catch (e: any) {
+      const code = String(e?.code || '');
+      if (code.includes('auth/requires-recent-login') && currentPassword) {
+        try {
+          const cred = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
+          await reauthenticateWithCredential(firebaseUser, cred);
+          await updatePassword(firebaseUser, newPassword);
+          return { ok: true };
+        } catch {
+          return {
+            ok: false,
+            message: 'Please log out, log in with your current password, then change it again.',
+          };
+        }
+      }
+      if (code.includes('auth/weak-password')) {
+        return { ok: false, message: 'Password is too weak. Please choose a stronger password.' };
+      }
+      return { ok: false, message: 'Failed to update login password. Please try again.' };
+    }
+  }
+
+  /**
+   * Change the parent's password (one-time only). Always saves to Registerd; updates Firebase Auth when available.
    */
   async changePassword(newPassword: string): Promise<{ success: boolean; message: string }> {
     try {
       const currentUser = this.authService.getCurrentUser();
-      if (!currentUser) {
+      if (!currentUser?.uid) {
         return { success: false, message: 'User not authenticated' };
       }
 
-      // Check if password was already changed
-      if (currentUser['passwordChanged'] === true) {
+      if (currentUser.passwordChanged === true) {
         return { success: false, message: 'Password has already been changed. You cannot change it again.' };
       }
 
-      // Update password in Firebase Auth (this is what login checks first).
-      // Requires a recent sign-in; the user is currently signed in when using the modal.
-      const firebaseUser = this.auth.currentUser;
-      if (!firebaseUser) {
-        // Critical: if we can’t update Firebase Auth, the user would still need the old password to log in.
-        return {
-          success: false,
-          message: 'Please log out and log back in, then change your password again.',
-        };
-      }
-      try {
-        await updatePassword(firebaseUser, newPassword);
-      } catch (e: any) {
-        const code = String(e?.code || '');
-        if (code.includes('auth/requires-recent-login')) {
-          return { success: false, message: 'Please log out and log back in, then change your password again.' };
-        }
-        return { success: false, message: 'Failed to update password. Please try again.' };
+      const email = String(currentUser.email || '').trim();
+      const currentPassword = String(currentUser.password || '');
+
+      const authSync = await this.syncFirebaseAuthPassword(email, currentPassword, newPassword);
+      if (!authSync.ok) {
+        return { success: false, message: authSync.message };
       }
 
-      // Update password in Firestore
       const userDocRef = doc(this.firestore, 'Registerd', currentUser.uid);
       await updateDoc(userDocRef, {
         password: newPassword,
         passwordConfirmation: newPassword,
         passwordChanged: true,
         passwordChangeRequired: false,
-        passwordChangedAt: serverTimestamp()
+        passwordChangedAt: serverTimestamp(),
       });
 
-      // Update the local user data
-      const updatedUser = {
-        ...currentUser,
+      this.authService.applyLocalUserPatch({
         password: newPassword,
         passwordConfirmation: newPassword,
-        passwordChanged: true
-      };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        passwordChanged: true,
+        passwordChangeRequired: false,
+      });
 
       return { success: true, message: 'Password changed successfully' };
-    } catch (error) {
+    } catch {
       return { success: false, message: 'Failed to change password' };
     }
   }
@@ -180,14 +222,12 @@ export class PasswordChangeService {
         passwordChangedAt: serverTimestamp()
       });
 
-      const updatedUser = {
-        ...currentUser,
+      this.authService.applyLocalUserPatch({
         password: input.newPassword,
         passwordConfirmation: input.newPassword,
         passwordChanged: true,
         passwordChangeRequired: false,
-      };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      });
 
       return { success: true, message: 'Password changed successfully' };
     } catch {

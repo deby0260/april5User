@@ -350,6 +350,7 @@ export class NotificationsPage implements OnInit, OnDestroy {
 
       const { data } = await modal.onDidDismiss();
       if (data?.success) {
+        await this.authService.reloadCurrentUserFromFirestore();
         await this.loadNotifications();
         this.showToast('Password changed successfully!');
       }

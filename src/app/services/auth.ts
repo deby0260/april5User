@@ -185,6 +185,17 @@ export class AuthService {
     return this.currentUserSubject.value;
   }
 
+  /** Updates in-memory session + localStorage (e.g. after password change). */
+  applyLocalUserPatch(patch: Partial<UserData>): void {
+    const user = this.getCurrentUser();
+    if (!user?.uid) {
+      return;
+    }
+    const merged: UserData = { ...user, ...patch, uid: user.uid };
+    localStorage.setItem('currentUser', JSON.stringify(merged));
+    this.currentUserSubject.next(merged);
+  }
+
   /** Merges latest Registerd fields into the active session (e.g. after settings edit). */
   async reloadCurrentUserFromFirestore(): Promise<UserData | null> {
     const user = this.getCurrentUser();
