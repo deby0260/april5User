@@ -41,16 +41,48 @@
 // Fix ion-select text visibility with high contrast
 ion-select {
   --color: #000000 !important;
+  --ion-text-color: #000000 !important;
+  --placeholder-color: #555555 !important;
+  --placeholder-opacity: 1;
   --background: #ffffff !important;
   --border-color: #333333 !important;
+  color-scheme: light;
+
+  &::part(text) {
+    color: #000000 !important;
+  }
+
+  &::part(placeholder) {
+    color: #555555 !important;
+    opacity: 1 !important;
+  }
+
+  &::part(icon) {
+    color: #333333 !important;
+  }
 
   .select-text {
     color: #000000 !important;
     font-weight: 500 !important;
   }
 
+  .select-placeholder {
+    color: #555555 !important;
+    opacity: 1 !important;
+  }
+
   .select-icon {
     color: #333333 !important;
+  }
+}
+
+ion-datetime-button {
+  --color: #000000 !important;
+  --ion-text-color: #000000 !important;
+  color-scheme: light;
+
+  &::part(native) {
+    color: #000000 !important;
   }
 }
 

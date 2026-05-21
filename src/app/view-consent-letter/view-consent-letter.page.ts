@@ -52,10 +52,10 @@ export class ViewConsentLetterPage implements OnInit {
   }
 
   /**
-   * Loads ONLY consent letters where the current user is the authorized
-   * fetcher (`authorizedFetcherUid === currentUser.uid`). Letters created
-   * before this field existed are intentionally hidden because we have no
-   * way to verify they were meant for this user.
+   * Loads letters the user may view:
+   * - Parent/owner who created the letter (`uid`)
+   * - Companion who was authorized (`authorizedFetcherUid`)
+   * Both queries run so the correct list appears regardless of role label.
    */
   async loadConsentLetters(): Promise<void> {
     this.isLoading = true;
@@ -67,29 +67,31 @@ export class ViewConsentLetterPage implements OnInit {
         return;
       }
 
-      // The viewer is fetcher-scoped. We query Firestore directly by
-      // `authorizedFetcherUid` so other family members never even read
-      // these docs (and unrelated reads stay light on quota).
+      const uid = currentUser.uid;
       const consentCollection = collection(this.firestore, 'Consent Letters');
-      const myLettersQuery = query(
-        consentCollection,
-        where('authorizedFetcherUid', '==', currentUser.uid),
-      );
-      const snap = await getDocs(myLettersQuery);
+
+      const [authorSnap, fetcherSnap] = await Promise.all([
+        getDocs(query(consentCollection, where('uid', '==', uid))),
+        getDocs(query(consentCollection, where('authorizedFetcherUid', '==', uid))),
+      ]);
 
       const family = await this.familyService.getUserFamily();
       const familyName = family?.name || '';
 
-      const letters: ConsentLetterData[] = [];
-      snap.forEach((docSnap) => {
+      const byId = new Map<string, ConsentLetterData>();
+
+      const ingest = (docSnap: { id: string; data: () => Record<string, unknown> }) => {
         const data = docSnap.data() as Record<string, any>;
-        // Belt-and-suspenders: even if Firestore returns something odd, we
-        // never surface a letter that doesn't actually authorize this user.
+        const authorUid = String(data['uid'] || '').trim();
         const fetcherUid = String(data['authorizedFetcherUid'] || '').trim();
-        if (!fetcherUid || fetcherUid !== currentUser.uid) {
+
+        const isAuthor = authorUid === uid;
+        const isAuthorizedFetcher = fetcherUid === uid;
+        if (!isAuthor && !isAuthorizedFetcher) {
           return;
         }
-        letters.push({
+
+        byId.set(docSnap.id, {
           id: docSnap.id,
           letter: data['letter'] || '',
           signature: data['signature'] || '',
@@ -99,15 +101,18 @@ export class ViewConsentLetterPage implements OnInit {
           validUntil: data['validUntil'] || 'Today Only',
           parentName: data['parentName'] || 'Parent',
           familyName: data['familyName'] || familyName,
-          uid: data['uid'] || '',
+          uid: authorUid,
           authorizedFetcherUid: fetcherUid,
           authorizedFetcherName: data['authorizedFetcherName'] || '',
           childName: data['childName'] || '',
           consentDate: data['consentDate'] || '',
         });
-      });
+      };
 
-      letters.sort((a, b) => {
+      authorSnap.forEach(ingest);
+      fetcherSnap.forEach(ingest);
+
+      const letters = Array.from(byId.values()).sort((a, b) => {
         const ta = this.timestampMs(a.dateIssued);
         const tb = this.timestampMs(b.dateIssued);
         return tb - ta;

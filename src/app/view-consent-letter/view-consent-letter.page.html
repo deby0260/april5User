@@ -12,6 +12,7 @@
     <div *ngIf="!isLoading && consentLetters.length === 0" class="empty-state">
       <ion-icon name="document-text-outline" class="empty-icon"></ion-icon>
       <h3>No Consent Letters</h3>
+      <p>Parents see letters they created. Companions see letters that authorize them.</p>
     </div>
 
     <div *ngIf="!isLoading && consentLetters.length > 1" class="letters-list">
