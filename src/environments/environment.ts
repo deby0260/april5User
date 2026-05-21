@@ -10,7 +10,8 @@ export const environment = {
    * calling register() crashes the app. Set to true only after that file is in place
    * and you run `npx cap sync android`.
    */
-  enableCapacitorPushRegistration: false,
+  /** Requires `android/app/google-services.json` — see docs/PUSH_NOTIFICATIONS_SETUP.md */
+  enableCapacitorPushRegistration: true,
   firebase: {
     apiKey: "AIzaSyBczGIrG5fC0sUqmd0-dMyohMEpI0JquEM",
     authDomain: "fetchsafe2.firebaseapp.com",

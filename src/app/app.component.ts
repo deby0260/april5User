@@ -57,12 +57,14 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe((user: UserData | null) => {
         if (user?.uid) {
           void this.notificationFeedsBackground.ensureRunning();
+          void this.notificationService.syncPushTokenAfterLogin();
         } else {
           this.notificationFeedsBackground.stop();
         }
       });
     if (this.authService.getCurrentUser()?.uid) {
       void this.notificationFeedsBackground.ensureRunning();
+      void this.notificationService.syncPushTokenAfterLogin();
     }
   }
 

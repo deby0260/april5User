@@ -4,6 +4,8 @@ import { Location } from '@angular/common';
 import { AuthService } from '../services/auth';
 import { LoadingController, AlertController, ToastController } from '@ionic/angular';
 import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
+import { NotificationService } from '../services/notification.service';
+import { NotificationPreferencesService } from '../services/notification-preferences.service';
 
 @Component({
   selector: 'app-login',
@@ -26,7 +28,9 @@ export class LoginPage implements OnInit {
     private loadingController: LoadingController,
     private alertController: AlertController,
     private toastController: ToastController,
-    private notificationFeedsBackground: NotificationFeedsBackgroundService
+    private notificationFeedsBackground: NotificationFeedsBackgroundService,
+    private notificationService: NotificationService,
+    private notificationPreferences: NotificationPreferencesService
   ) { }
 
   ngOnInit() {
@@ -58,7 +62,12 @@ export class LoginPage implements OnInit {
 
         await this.showToast('Login successful!', 'success');
 
+        await this.notificationPreferences.syncFromFirestore();
         void this.notificationFeedsBackground.ensureRunning();
+        await this.notificationService.syncAppNotificationPreference(
+          this.notificationPreferences.isAppNotificationsEnabled()
+        );
+        await this.notificationService.syncPushTokenAfterLogin();
 
         this.router.navigate(['/home']);
       } else {

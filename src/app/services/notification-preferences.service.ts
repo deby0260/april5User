@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Firestore, doc, getDoc } from '@angular/fire/firestore';
+import { Firestore, doc, getDoc, setDoc } from '@angular/fire/firestore';
 import { AuthService } from './auth';
 
 const SETTINGS_KEY = 'fetchsafe-settings';
@@ -57,11 +57,15 @@ export class NotificationPreferencesService {
       }
       const email = snap.get('emailNotifications');
       const sms = snap.get('smsNotifications');
+      const app = snap.get('appNotifications');
       if (typeof email === 'boolean') {
         prefs.emailNotifications = email;
       }
       if (typeof sms === 'boolean') {
         prefs.smsNotifications = sms;
+      }
+      if (typeof app === 'boolean') {
+        prefs.appNotifications = app;
       }
       let stored: Record<string, unknown> = {};
       try {
@@ -78,6 +82,7 @@ export class NotificationPreferencesService {
           ...stored,
           emailNotifications: prefs.emailNotifications,
           smsNotifications: prefs.smsNotifications,
+          appNotifications: prefs.appNotifications,
         })
       );
     } catch {
@@ -96,5 +101,22 @@ export class NotificationPreferencesService {
 
   isSmsNotificationsEnabled(): boolean {
     return this.readLocal().smsNotifications;
+  }
+
+  /** Cloud Functions read `Registerd.appNotifications` (default on when unset). */
+  async syncAppNotificationsToProfile(enabled: boolean): Promise<void> {
+    const uid = this.authService.getCurrentUser()?.uid;
+    if (!uid) {
+      return;
+    }
+    try {
+      await setDoc(
+        doc(this.firestore, 'Registerd', uid),
+        { appNotifications: enabled },
+        { merge: true }
+      );
+    } catch {
+      /* noop */
+    }
   }
 }

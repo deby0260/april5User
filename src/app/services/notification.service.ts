@@ -55,6 +55,7 @@ export class NotificationService implements PickupReminderSync {
   private nativeStackAttached = false;
 
   private static readonly SETTINGS_STORAGE_KEY = 'fetchsafe-settings';
+  private static readonly PENDING_PUSH_TOKEN_KEY = 'fetchsafe-pending-push-token';
   private static readonly PICKUP_REMINDER_KEYS_STORAGE = 'fetchsafe-pickup-reminder-keys-v1';
   private static readonly PICKUP_REMINDER_LAST_SYNC_MS = 'fetchsafe-pickup-reminder-last-sync-ms';
   /** Throttled background syncs (e.g. silent view-schedule polls); login / explicit `force` bypass. */
@@ -165,14 +166,19 @@ export class NotificationService implements PickupReminderSync {
   private async clearPushTokenInProfile(): Promise<void> {
     try {
       const currentUser = this.authService.getCurrentUser();
-      if (!currentUser) return;
-      const userDocRef = doc(this.firestore, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
+      if (!currentUser) {
+        return;
+      }
+      const uid = currentUser.uid;
+      const payload = {
         pushToken: deleteField(),
         lastTokenUpdate: deleteField(),
-      });
-    } catch (e) {
-      // Intentionally silent: avoid console chatter.
+      };
+      await updateDoc(doc(this.firestore, 'users', uid), payload);
+      await setDoc(doc(this.firestore, 'Registerd', uid), payload, { merge: true });
+      localStorage.removeItem(NotificationService.PENDING_PUSH_TOKEN_KEY);
+    } catch {
+      /* noop */
     }
   }
 
@@ -184,24 +190,46 @@ export class NotificationService implements PickupReminderSync {
     const permission = await PushNotifications.requestPermissions();
     
     if (permission.receive === 'granted') {
-      
-      await PushNotifications.register();
-
-      
       PushNotifications.addListener('registration', async (token: Token) => {
         await this.savePushToken(token.value);
       });
-
-      
       PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
         this.handlePushNotificationReceived(notification);
       });
-
-      
       PushNotifications.addListener('pushNotificationActionPerformed', (notification: ActionPerformed) => {
         this.handlePushNotificationAction(notification);
       });
-    } else {
+      try {
+        await PushNotifications.register();
+      } catch {
+        /* google-services.json missing or FCM misconfigured */
+      }
+    }
+  }
+
+  /**
+   * After login: persist any token received before auth, then refresh FCM registration.
+   */
+  async syncPushTokenAfterLogin(): Promise<void> {
+    if (!Capacitor.isNativePlatform() || !this.readAppNotificationsEnabled()) {
+      return;
+    }
+    if (!environment.enableCapacitorPushRegistration) {
+      return;
+    }
+    const pending = localStorage.getItem(NotificationService.PENDING_PUSH_TOKEN_KEY);
+    if (pending) {
+      await this.savePushToken(pending);
+    }
+    if (!this.nativeStackAttached) {
+      await this.attachNativeNotificationStack();
+      this.isInitialized = true;
+      return;
+    }
+    try {
+      await PushNotifications.register();
+    } catch {
+      /* noop */
     }
   }
 
@@ -221,17 +249,33 @@ export class NotificationService implements PickupReminderSync {
   }
 
   private async savePushToken(token: string) {
+    const trimmed = String(token || '').trim();
+    if (!trimmed) {
+      return;
+    }
     try {
       const currentUser = this.authService.getCurrentUser();
-      if (!currentUser) return;
+      if (!currentUser?.uid) {
+        localStorage.setItem(NotificationService.PENDING_PUSH_TOKEN_KEY, trimmed);
+        return;
+      }
+      await this.persistPushToken(currentUser.uid, trimmed);
+      localStorage.removeItem(NotificationService.PENDING_PUSH_TOKEN_KEY);
+    } catch {
+      /* noop */
+    }
+  }
 
-      const userDocRef = doc(this.firestore, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
-        pushToken: token,
-        lastTokenUpdate: new Date()
-      });
-    } catch (error) {
-      // Intentionally silent: avoid console chatter.
+  private async persistPushToken(uid: string, token: string): Promise<void> {
+    const payload = {
+      pushToken: token,
+      lastTokenUpdate: new Date(),
+    };
+    await setDoc(doc(this.firestore, 'Registerd', uid), payload, { merge: true });
+    try {
+      await updateDoc(doc(this.firestore, 'users', uid), payload);
+    } catch {
+      await setDoc(doc(this.firestore, 'users', uid), payload, { merge: true });
     }
   }
 
@@ -240,7 +284,8 @@ export class NotificationService implements PickupReminderSync {
       return;
     }
 
-    if (notification.data?.type === 'panic') {
+    const type = String(notification.data?.type || '');
+    if (type === 'panic' || type === 'panic_alert') {
       this.handlePanicNotification(notification);
     }
   }
@@ -833,17 +878,23 @@ export class NotificationService implements PickupReminderSync {
   async getPushToken(): Promise<string | null> {
     try {
       const currentUser = this.authService.getCurrentUser();
-      if (!currentUser) return null;
-
-      const userDocRef = doc(this.firestore, 'users', currentUser.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      if (userDoc.exists()) {
-        return userDoc.data()['pushToken'] || null;
+      if (!currentUser) {
+        return null;
       }
-
+      const regSnap = await getDoc(doc(this.firestore, 'Registerd', currentUser.uid));
+      if (regSnap.exists()) {
+        const t = regSnap.get('pushToken');
+        if (typeof t === 'string' && t.trim()) {
+          return t.trim();
+        }
+      }
+      const userDoc = await getDoc(doc(this.firestore, 'users', currentUser.uid));
+      if (userDoc.exists()) {
+        const t = userDoc.data()['pushToken'];
+        return typeof t === 'string' && t.trim() ? t.trim() : null;
+      }
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }

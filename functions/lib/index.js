@@ -32,6 +32,15 @@ const SMS_TYPES = new Set([
 /** Pick Up Log docs often have no recipientId — SMS every opted-in family member. */
 const FAMILY_BROADCAST_SMS_TYPES = new Set(["pickup_completion"]);
 
+/** Same events as SMS — push via FCM when `Registerd.pushToken` is set. */
+const PUSH_TYPES = new Set([
+  "schedule_assignment",
+  "pickup_completion",
+  "schedule_completion",
+  "panic_alert",
+]);
+const FAMILY_BROADCAST_PUSH_TYPES = new Set(["pickup_completion"]);
+
 function getIprogConfig() {
   const cfg = functions.config().iprog || {};
   const apiToken = cfg?.api_token?.trim?.();
@@ -243,6 +252,155 @@ async function broadcastSmsToFamily(familyName, buildBodyForUid) {
         familyName,
         phone: sent.phone,
       });
+    }
+    return null;
+  });
+}
+
+async function isAppNotificationsEnabledForUid(uid) {
+  if (!uid) {
+    return false;
+  }
+  try {
+    const snap = await admin.firestore().doc(`Registerd/${uid}`).get();
+    if (!snap.exists) {
+      return true;
+    }
+    return snap.get("appNotifications") !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function getPushTokenForUid(uid) {
+  if (!uid) {
+    return null;
+  }
+  const regSnap = await admin.firestore().doc(`Registerd/${uid}`).get();
+  if (regSnap.exists) {
+    const t = regSnap.get("pushToken");
+    if (typeof t === "string" && t.trim()) {
+      return t.trim();
+    }
+  }
+  const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+  if (userSnap.exists) {
+    const t = userSnap.get("pushToken");
+    if (typeof t === "string" && t.trim()) {
+      return t.trim();
+    }
+  }
+  return null;
+}
+
+function fcmStringData(obj) {
+  const out = {};
+  for (const [key, val] of Object.entries(obj || {})) {
+    if (val == null) {
+      continue;
+    }
+    out[String(key)] = String(val);
+  }
+  return out;
+}
+
+function truncatePushBody(text, maxLen) {
+  const s = String(text || "").trim();
+  if (s.length <= maxLen) {
+    return s;
+  }
+  return `${s.slice(0, maxLen - 3)}...`;
+}
+
+function buildPushPayloadFromNotification(data, type) {
+  const title =
+    typeof data?.title === "string" && data.title.trim() ? data.title.trim() : "Notification";
+  const message =
+    (typeof data?.message === "string" && data.message.trim()) ||
+    title ||
+    "You have an update in FetchSafe.";
+  const isPanic = type === "panic_alert";
+  const pushTitle = isPanic ? "PANIC ALERT" : `FetchSafe: ${notificationKindLabel(type)}`;
+  const pushBody = truncatePushBody(message, 200);
+  return {
+    title: pushTitle,
+    body: pushBody,
+    priority: isPanic ? "high" : "normal",
+    data: fcmStringData({
+      type: type || "general",
+      actionUrl: isPanic ? "/notifications" : "/notifications",
+      familyName: data?.familyName || "",
+      notificationTitle: title,
+    }),
+  };
+}
+
+async function trySendPushToUid(uid, payload) {
+  const enabled = await isAppNotificationsEnabledForUid(uid);
+  if (!enabled) {
+    return { ok: false, reason: "push_disabled" };
+  }
+  const token = await getPushTokenForUid(uid);
+  if (!token) {
+    return { ok: false, reason: "no_token" };
+  }
+  const high = payload.priority === "high";
+  try {
+    await admin.messaging().send({
+      token,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
+      data: payload.data || {},
+      android: {
+        priority: high ? "high" : "normal",
+        notification: {
+          channelId: high ? "fetchsafe_emergency" : "fetchsafe_alerts",
+          priority: high ? "max" : "default",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: { title: payload.title, body: payload.body },
+            sound: high ? "default" : "default",
+          },
+        },
+      },
+    });
+    return { ok: true, token };
+  } catch (err) {
+    const code = err?.code || err?.errorInfo?.code;
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token"
+    ) {
+      try {
+        await admin.firestore().doc(`Registerd/${uid}`).set(
+          { pushToken: admin.firestore.FieldValue.delete(), lastTokenUpdate: admin.firestore.FieldValue.delete() },
+          { merge: true }
+        );
+      } catch {
+        /* noop */
+      }
+    }
+    functions.logger.warn("FCM send failed", { uid, code, err: String(err) });
+    return { ok: false, reason: "send_failed" };
+  }
+}
+
+async function broadcastPushToFamily(familyName, buildPayloadForUid) {
+  const uids = await listFamilyRegisterdUids(familyName);
+  if (!uids.length) {
+    return;
+  }
+  await mapLimit(uids, 10, async (uid) => {
+    const timeZone = await getTimeZoneForUid(uid);
+    const payload = buildPayloadForUid(timeZone);
+    const sent = await trySendPushToUid(uid, payload);
+    if (sent.ok) {
+      functions.logger.info("FCM push queued", { uid, familyName });
     }
     return null;
   });
@@ -1091,6 +1249,128 @@ exports.sendSmsOnScanEventCreate = functions.firestore
         err: String(e),
       });
     }
+    return null;
+  });
+
+/** FCM push for `Notifications` inbox rows (recipient or family broadcast). */
+exports.sendPushOnNotificationCreate = functions.firestore
+  .document("Notifications/{docId}")
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    const type = data?.type;
+    if (!type || !PUSH_TYPES.has(type)) {
+      return null;
+    }
+    const buildPayload = () => {
+      if (type === "pickup_completion") {
+        const title =
+          typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Pickup";
+        const message =
+          typeof data.message === "string" && data.message.trim() ? data.message.trim() : title;
+        return {
+          title: "FetchSafe: Pickup",
+          body: truncatePushBody(message, 200),
+          priority: "normal",
+          data: fcmStringData({
+            type: "pickup_completion",
+            actionUrl: "/notification-log",
+            familyName: data?.familyName || "",
+          }),
+        };
+      }
+      return buildPushPayloadFromNotification(data, type);
+    };
+
+    const recipientId = data?.recipientId;
+    if (recipientId) {
+      const sent = await trySendPushToUid(recipientId, buildPayload());
+      if (sent.ok) {
+        functions.logger.info("FCM push queued", { recipientId, type });
+      }
+      return null;
+    }
+
+    const familyName =
+      typeof data?.familyName === "string" && data.familyName.trim()
+        ? data.familyName.trim()
+        : "";
+    if (FAMILY_BROADCAST_PUSH_TYPES.has(type) && familyName) {
+      await broadcastPushToFamily(familyName, () => buildPayload());
+      await snap.ref.set(
+        { pushBroadcastAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    }
+    return null;
+  });
+
+/** FCM push for school check-in / check-out (Pick Up Log scan events). */
+exports.sendPushOnScanEventCreate = functions.firestore
+  .document("ScanEvents/{docId}")
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    if (data.pushSentAt != null) {
+      return null;
+    }
+    const familyName =
+      typeof data?.familyName === "string" && data.familyName.trim()
+        ? data.familyName.trim()
+        : "";
+    if (!familyName) {
+      return null;
+    }
+    try {
+      const scheduleIndex = await loadScheduledChildNamesIndex(familyName);
+      await broadcastPushToFamily(familyName, (timeZone) => {
+        const smsBody = buildScanPickupLogSmsBody(data, scheduleIndex, timeZone);
+        const parts = smsBody.split("\n\n").filter(Boolean);
+        const headline = parts[0] || "School";
+        const detail = parts[1] || parts[0] || "Scan update";
+        const isCheckIn = headline.toLowerCase().includes("check-in");
+        return {
+          title: isCheckIn ? "FetchSafe: School check-in" : "FetchSafe",
+          body: truncatePushBody(detail, 200),
+          priority: "normal",
+          data: fcmStringData({
+            type: "building_scan",
+            actionUrl: "/notification-log",
+            familyName,
+          }),
+        };
+      });
+      await snap.ref.set(
+        { pushSentAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } catch (e) {
+      functions.logger.error("Scan push handler failed", { docId: snap.id, err: String(e) });
+    }
+    return null;
+  });
+
+/** FCM push when admin posts an announcement (all users with app notifications on). */
+exports.sendPushOnAnnouncementCreate = functions.firestore
+  .document("Announcements/{docId}")
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    const title =
+      typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Announcement";
+    const bodyRaw =
+      typeof data.body === "string" && data.body.trim() ? data.body.trim() : title;
+    const payload = {
+      title: "FetchSafe: Announcement",
+      body: truncatePushBody(bodyRaw, 200),
+      priority: "normal",
+      data: fcmStringData({
+        type: "admin_announcement",
+        actionUrl: "/notifications",
+      }),
+    };
+    const uids = await listSmsRecipientUids();
+    await mapLimit(uids, 10, async (uid) => {
+      await trySendPushToUid(uid, payload);
+      return null;
+    });
     return null;
   });
 

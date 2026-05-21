@@ -8,6 +8,7 @@ import { NotificationService } from '../services/notification.service';
 import { PasswordChangeService } from '../services/password-change.service';
 import { ImagePickerService } from '../services/image-picker';
 import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
+import { NotificationPreferencesService } from '../services/notification-preferences.service';
 
 interface AppSettings {
   appNotifications: boolean;
@@ -44,7 +45,8 @@ export class SettingsPage implements OnInit {
     private notificationService: NotificationService,
     private passwordChangeService: PasswordChangeService,
     private imagePickerService: ImagePickerService,
-    private notificationFeedsBackground: NotificationFeedsBackgroundService
+    private notificationFeedsBackground: NotificationFeedsBackgroundService,
+    private notificationPreferences: NotificationPreferencesService
   ) { }
 
   async ngOnInit() {
@@ -77,6 +79,7 @@ export class SettingsPage implements OnInit {
     localStorage.setItem('fetchsafe-settings', JSON.stringify(this.settings));
     await this.syncEmailNotificationPreferenceToProfile();
     await this.syncSmsNotificationPreferenceToProfile();
+    await this.notificationPreferences.syncAppNotificationsToProfile(this.settings.appNotifications);
     await this.notificationService.syncAppNotificationPreference(this.settings.appNotifications);
     void this.notificationFeedsBackground.ensureRunning();
     if (!this.settings.appNotifications) {

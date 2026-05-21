@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "418034723029",
+    "project_id": "fetchsafe2",
+    "storage_bucket": "fetchsafe2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:418034723029:android:446cffa25e1465dcb91a5c",
+        "android_client_info": {
+          "package_name": "io.ionic.starter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfNTOEyxe5sQ9WWQdBoDckuOqdB0Fss7A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,7 +4,8 @@ export const environment = {
    * Set true only after `android/app/google-services.json` exists and matches
    * your `applicationId` (e.g. io.ionic.starter).
    */
-  enableCapacitorPushRegistration: false,
+  /** Requires `android/app/google-services.json` — see docs/PUSH_NOTIFICATIONS_SETUP.md */
+  enableCapacitorPushRegistration: true,
   firebase: {
     apiKey: "AIzaSyBczGIrG5fC0sUqmd0-dMyohMEpI0JquEM",
     authDomain: "fetchsafe2.firebaseapp.com",
