@@ -4,9 +4,13 @@ import { debounceTime, filter } from 'rxjs/operators';
 import { AuthService } from './auth';
 import { FamilyService } from './family.service';
 import { NotificationInboxFeedService, InboxFeedItem } from './notification-inbox-feed.service';
-import { PickupNotificationLogLoaderService } from './pickup-notification-log-loader.service';
+import {
+  PickupNotificationLogLoaderService,
+  PickupLogNotificationRow,
+} from './pickup-notification-log-loader.service';
 import { NotificationService } from './notification.service';
 import { NotificationEmailForwardService } from './notification-email-forward.service';
+import { NotificationSmsForwardService } from './notification-sms-forward.service';
 import { NotificationPreferencesService } from './notification-preferences.service';
 
 /**
@@ -21,6 +25,7 @@ import { NotificationPreferencesService } from './notification-preferences.servi
 export class NotificationFeedsBackgroundService {
   private lastUid: string | null = null;
   private inboxEmailForwardSub: Subscription | null = null;
+  private pickupLogSmsForwardSub: Subscription | null = null;
 
   constructor(
     private authService: AuthService,
@@ -29,6 +34,7 @@ export class NotificationFeedsBackgroundService {
     private pickupLogLoader: PickupNotificationLogLoaderService,
     private notificationService: NotificationService,
     private emailForward: NotificationEmailForwardService,
+    private smsForward: NotificationSmsForwardService,
     private notificationPreferences: NotificationPreferencesService
   ) {}
 
@@ -60,6 +66,7 @@ export class NotificationFeedsBackgroundService {
       const family = await this.familyService.getUserFamily();
       if (family?.name) {
         this.pickupLogLoader.start(family.name);
+        this.attachPickupLogSmsForward();
       } else {
         this.pickupLogLoader.stop();
       }
@@ -73,6 +80,10 @@ export class NotificationFeedsBackgroundService {
     if (this.inboxEmailForwardSub) {
       this.inboxEmailForwardSub.unsubscribe();
       this.inboxEmailForwardSub = null;
+    }
+    if (this.pickupLogSmsForwardSub) {
+      this.pickupLogSmsForwardSub.unsubscribe();
+      this.pickupLogSmsForwardSub = null;
     }
     this.inboxFeed.stop();
     this.pickupLogLoader.stop();
@@ -88,6 +99,58 @@ export class NotificationFeedsBackgroundService {
         filter((list) => list.length > 0)
       )
       .subscribe((list) => void this.forwardInboxEmails(list));
+  }
+
+  private attachPickupLogSmsForward(): void {
+    if (this.pickupLogSmsForwardSub) {
+      return;
+    }
+    this.pickupLogSmsForwardSub = this.pickupLogLoader.rows$
+      .pipe(
+        debounceTime(800),
+        filter((rows) => rows.length > 0)
+      )
+      .subscribe((rows) => void this.forwardPickupLogSms(rows));
+  }
+
+  private async forwardPickupLogSms(rows: PickupLogNotificationRow[]): Promise<void> {
+    if (!this.smsForward.isSmsForwardingEnabled()) {
+      return;
+    }
+    await this.smsForward.forwardNewNotifications(
+      rows.map((n) => ({
+        id: n.id,
+        title: n.title,
+        displayMessage: n.message || n.subtitle || n.title,
+        time: this.formatPickupLogTime(n),
+        type: n.type,
+      }))
+    );
+  }
+
+  private formatPickupLogTime(n: {
+    createdAt?: { toDate?: () => Date };
+    time?: string;
+  }): string {
+    if (!n.createdAt) {
+      return n.time || '';
+    }
+    try {
+      const d = n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt as unknown as string);
+      if (Number.isNaN(d.getTime())) {
+        return n.time || '';
+      }
+      return d.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch {
+      return n.time || '';
+    }
   }
 
   private async forwardInboxEmails(list: InboxFeedItem[]): Promise<void> {

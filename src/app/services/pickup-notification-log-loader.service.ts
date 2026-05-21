@@ -406,7 +406,7 @@ export class PickupNotificationLogLoaderService implements OnDestroy {
               { text: who, bold: true },
               { text: ' has left the school', bold: false },
             ];
-            subtitle = `${exitSubtitle}. No matching pickup was found for this person today — confirm the schedule date and fetcher.`;
+            subtitle = `${exitSubtitle}. No matching pickup was found for this person today. Confirm the schedule date and fetcher.`;
           }
         }
 

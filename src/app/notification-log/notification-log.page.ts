@@ -14,6 +14,7 @@ import { AuthService } from '../services/auth';
 import { FamilyService } from '../services/family.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationEmailForwardService } from '../services/notification-email-forward.service';
+import { NotificationSmsForwardService } from '../services/notification-sms-forward.service';
 import { PickupNotificationLogLoaderService } from '../services/pickup-notification-log-loader.service';
 import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
 import { LoadingController, ToastController } from '@ionic/angular';
@@ -57,6 +58,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
     private familyService: FamilyService,
     private panicService: PanicService,
     private notificationEmailForwardService: NotificationEmailForwardService,
+    private notificationSmsForwardService: NotificationSmsForwardService,
     private pickupNotificationLogLoader: PickupNotificationLogLoaderService,
     private notificationFeedsBackground: NotificationFeedsBackgroundService,
     private loadingController: LoadingController,
@@ -176,16 +178,18 @@ export class NotificationLogPage implements OnInit, OnDestroy {
       await this.notificationFeedsBackground.ensureRunning();
       await this.pickupNotificationLogLoader.refreshNow(family.name);
       const merged = this.pickupNotificationLogLoader.rows$.value;
+      const digestItems = merged.map((n) => ({
+        id: n.id,
+        title: n.title,
+        displayMessage: this.buildDetailBody(n),
+        time: this.detailTimestamp(n),
+        type: n.type,
+      }));
       if (currentUser.email && this.notificationEmailForwardService.isEmailForwardingEnabled()) {
-        await this.notificationEmailForwardService.forwardNewNotifications(
-          merged.map((n) => ({
-            id: n.id,
-            title: n.title,
-            displayMessage: this.buildDetailBody(n),
-            time: this.detailTimestamp(n),
-            type: n.type,
-          }))
-        );
+        await this.notificationEmailForwardService.forwardNewNotifications(digestItems);
+      }
+      if (this.notificationSmsForwardService.isSmsForwardingEnabled()) {
+        await this.notificationSmsForwardService.forwardNewNotifications(digestItems);
       }
     } catch {
       /* noop */

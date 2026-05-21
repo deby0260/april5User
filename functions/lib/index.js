@@ -29,6 +29,9 @@ const SMS_TYPES = new Set([
   "panic_alert",
 ]);
 
+/** Pick Up Log docs often have no recipientId — SMS every opted-in family member. */
+const FAMILY_BROADCAST_SMS_TYPES = new Set(["pickup_completion"]);
+
 function getIprogConfig() {
   const cfg = functions.config().iprog || {};
   const apiToken = cfg?.api_token?.trim?.();
@@ -178,6 +181,73 @@ async function listSmsRecipientUids() {
   return uids;
 }
 
+async function listFamilyRegisterdUids(familyName) {
+  const name = String(familyName || "").trim();
+  if (!name) {
+    return [];
+  }
+  const snap = await admin
+    .firestore()
+    .collection("Registerd")
+    .where("familyName", "==", name)
+    .get();
+  const uids = [];
+  snap.forEach((d) => {
+    if (d.id) {
+      uids.push(d.id);
+    }
+  });
+  return uids;
+}
+
+async function trySendSmsToUid(iprog, uid, body) {
+  const enabled = await isSmsNotificationsEnabledForUid(uid);
+  if (!enabled) {
+    return { ok: false, reason: "sms_disabled" };
+  }
+  const rawPhone = await getContactNumberForUid(uid);
+  if (!rawPhone) {
+    functions.logger.warn("SMS skipped: missing contactNumber", { uid });
+    return { ok: false, reason: "no_phone" };
+  }
+  const phone = toIprogPhone(rawPhone);
+  if (!phone) {
+    functions.logger.warn("SMS skipped: invalid contactNumber format", { uid });
+    return { ok: false, reason: "invalid_phone" };
+  }
+  try {
+    const result = await sendOneIprogSms(iprog.apiToken, phone, body);
+    return { ok: true, phone, result };
+  } catch (err) {
+    functions.logger.error("IPROG SMS failed", { uid, err });
+    return { ok: false, reason: "send_failed" };
+  }
+}
+
+async function broadcastSmsToFamily(familyName, buildBodyForUid) {
+  const iprog = getIprogConfig();
+  if (!iprog) {
+    return;
+  }
+  const uids = await listFamilyRegisterdUids(familyName);
+  if (!uids.length) {
+    return;
+  }
+  await mapLimit(uids, 10, async (uid) => {
+    const timeZone = await getTimeZoneForUid(uid);
+    const body = buildBodyForUid(timeZone);
+    const sent = await trySendSmsToUid(iprog, uid, body);
+    if (sent.ok) {
+      functions.logger.info("IPROG family SMS queued", {
+        uid,
+        familyName,
+        phone: sent.phone,
+      });
+    }
+    return null;
+  });
+}
+
 async function mapLimit(items, limit, fn) {
   const results = [];
   let idx = 0;
@@ -250,6 +320,218 @@ function formatEmailDateTime(date, timeZone) {
     second: "2-digit",
     hour12: true,
   });
+}
+
+/** Matches Pick Up Log detail modal `detailTimestamp()`. */
+function formatPickupLogDetailTime(date, timeZone) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "Unknown time";
+  }
+  const tz = isValidIanaTimeZone(timeZone) ? String(timeZone).trim() : DEFAULT_EMAIL_TIMEZONE;
+  return date.toLocaleString("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Matches Pick Up Log list clock (e.g. "1:25 PM"). */
+function formatPickupLogClockTime(date, timeZone) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+  const tz = isValidIanaTimeZone(timeZone) ? String(timeZone).trim() : DEFAULT_EMAIL_TIMEZONE;
+  return date.toLocaleString("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function joinPickupLogSmsLines(lines) {
+  return lines
+    .map((l) => String(l || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function firestoreTimestampToDate(v) {
+  if (v == null) {
+    return new Date();
+  }
+  if (typeof v?.toDate === "function") {
+    return v.toDate();
+  }
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function toLocalYmdInTimeZone(date, timeZone) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const tz = isValidIanaTimeZone(timeZone) ? String(timeZone).trim() : DEFAULT_EMAIL_TIMEZONE;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+  return y && m && d ? `${y}-${m}-${d}` : "";
+}
+
+function scheduleDateYmdFromFirestore(val) {
+  if (val == null) {
+    return "";
+  }
+  if (typeof val === "string") {
+    const parts = val.split("-").map((n) => parseInt(n, 10));
+    if (parts.length === 3 && !parts.some((n) => Number.isNaN(n))) {
+      const [y, mo, day] = parts;
+      return `${y}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    const d = new Date(val);
+    if (!Number.isNaN(d.getTime())) {
+      return toLocalYmdInTimeZone(d, DEFAULT_EMAIL_TIMEZONE);
+    }
+    return "";
+  }
+  if (typeof val?.toDate === "function") {
+    return toLocalYmdInTimeZone(val.toDate(), DEFAULT_EMAIL_TIMEZONE);
+  }
+  return "";
+}
+
+function displayNameFromScan(data) {
+  const name = String(data?.authorizerName || "").trim();
+  if (name) {
+    return name;
+  }
+  const email = String(data?.authorizerEmail || "").trim();
+  if (email) {
+    return email;
+  }
+  const uid = String(data?.authorizerUid || "").trim();
+  if (uid) {
+    return uid;
+  }
+  return "Pickup person";
+}
+
+async function loadScheduledChildNamesIndex(familyName) {
+  const idx = new Map();
+  const name = String(familyName || "").trim();
+  if (!name) {
+    return idx;
+  }
+  const snap = await admin
+    .firestore()
+    .collection("Schedules")
+    .where("Family Name", "==", name)
+    .get();
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    const ymd = scheduleDateYmdFromFirestore(d["Date"]);
+    const fetcherUid = String(d["Fetcher UID"] || "").trim();
+    const child = String(d["Childs Name"] || "").trim();
+    if (!ymd || !fetcherUid || !child) {
+      return;
+    }
+    const key = `${ymd}|${fetcherUid}`;
+    const bucket = idx.get(key) || { pending: [], completed: [] };
+    const status = (d["Status"] || "pending").toString();
+    if (status === "pending") {
+      bucket.pending.push(child);
+    } else if (status === "completed") {
+      bucket.completed.push(child);
+    }
+    idx.set(key, bucket);
+  });
+  return idx;
+}
+
+function resolveScheduledChildNames(index, authorizerUid, scannedAt, timeZone) {
+  const scanYmd = toLocalYmdInTimeZone(scannedAt, timeZone);
+  const uid = String(authorizerUid || "").trim();
+  if (!scanYmd || !uid) {
+    return [];
+  }
+  const bucket = index.get(`${scanYmd}|${uid}`);
+  if (!bucket) {
+    return [];
+  }
+  const pick = bucket.pending.length > 0 ? bucket.pending : bucket.completed;
+  return [...new Set(pick)].sort((a, b) => a.localeCompare(b));
+}
+
+/** Same layout as Pick Up Log detail modal for scan rows (`buildDetailBody`). */
+function buildScanPickupLogSmsBody(scanData, scheduleIndex, timeZone) {
+  const action =
+    typeof scanData?.action === "string" && scanData.action.trim()
+      ? scanData.action.trim()
+      : "Scan";
+  const scannedAt = firestoreTimestampToDate(scanData?.scannedAt);
+  const who = displayNameFromScan(scanData);
+  const authorizerUid = String(scanData?.authorizerUid || "").trim();
+  const children = resolveScheduledChildNames(scheduleIndex, authorizerUid, scannedAt, timeZone);
+  const clockLabel = formatPickupLogClockTime(scannedAt, timeZone);
+
+  let headline;
+  let title;
+  let subtitle;
+
+  if (action === "Entered") {
+    headline = "School check-in";
+    title = `${who} has arrived at the school at ${clockLabel}`;
+    if (children.length === 1) {
+      subtitle = `To pick up ${children[0]}`;
+    } else if (children.length > 1) {
+      subtitle = `To pick up ${children.join(", ")}`;
+    } else {
+      subtitle = "Arrival recorded";
+    }
+  } else {
+    headline = "School check-out";
+    const exitSubtitle = `Exited at ${clockLabel} at the school`;
+    if (children.length === 1) {
+      title = `${children[0]} was picked up by ${who}`;
+      subtitle = exitSubtitle;
+    } else if (children.length > 1) {
+      title = `${children.join(", ")} were picked up by ${who}`;
+      subtitle = exitSubtitle;
+    } else {
+      headline = "";
+      title = `${who} has left the school`;
+      subtitle = `${exitSubtitle}. No matching pickup was found for this person today. Confirm the schedule date and fetcher.`;
+    }
+  }
+
+  const lines = [];
+  if (headline) {
+    lines.push(headline);
+  }
+  lines.push(title, subtitle, `Time: ${formatPickupLogDetailTime(scannedAt, timeZone)}`);
+  return joinPickupLogSmsLines(lines);
+}
+
+/** Pick Up Log `pickup_completion` rows — title, message, then Time line. */
+function buildPickupCompletionSmsBody(data, timeZone) {
+  const title =
+    typeof data?.title === "string" && data.title.trim() ? data.title.trim() : "Pickup";
+  const message =
+    typeof data?.message === "string" && data.message.trim() ? data.message.trim() : "";
+  const createdAt = firestoreTimestampToDate(data?.createdAt);
+  const lines = [title, message, `Time: ${formatPickupLogDetailTime(createdAt, timeZone)}`];
+  return joinPickupLogSmsLines(lines);
 }
 
 async function getAuthEmailForUid(uid) {
@@ -391,47 +673,57 @@ exports.sendSmsOnNotificationCreate = functions.firestore
   .onCreate(async (snap) => {
     const data = snap.data();
     const type = data?.type;
-    const recipientId = data?.recipientId;
-    if (!type || !recipientId || !SMS_TYPES.has(type)) {
-      return null;
-    }
-    const enabled = await isSmsNotificationsEnabledForUid(recipientId);
-    if (!enabled) {
+    if (!type || !SMS_TYPES.has(type)) {
       return null;
     }
     const iprog = getIprogConfig();
     if (!iprog) {
       return null;
     }
-    const rawPhone = await getContactNumberForUid(recipientId);
-    if (!rawPhone) {
-      functions.logger.warn("SMS skipped: missing contactNumber", { recipientId });
-      return null;
-    }
-    const phone = toIprogPhone(rawPhone);
-    if (!phone) {
-      functions.logger.warn("SMS skipped: invalid contactNumber format", { recipientId });
-      return null;
-    }
-    const timeZone = await getTimeZoneForUid(recipientId);
     const title =
       typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Notification";
     const message =
       (typeof data.message === "string" && data.message.trim()) ||
       title ||
       "You have an update in FetchSafe.";
-    const body = buildNotificationPlainBody({
-      kind: notificationKindLabel(type),
-      title,
-      message,
-      createdAt: data?.createdAt,
-      timeZone,
-    });
-    try {
-      const result = await sendOneIprogSms(iprog.apiToken, phone, body);
-      functions.logger.info("IPROG SMS queued", { recipientId, type, phone, result });
-    } catch (err) {
-      functions.logger.error("IPROG SMS failed", err);
+    const buildBody = (timeZone) => {
+      if (type === "pickup_completion") {
+        return buildPickupCompletionSmsBody(data, timeZone);
+      }
+      return buildNotificationPlainBody({
+        kind: notificationKindLabel(type),
+        title,
+        message,
+        createdAt: data?.createdAt,
+        timeZone,
+      });
+    };
+
+    const recipientId = data?.recipientId;
+    if (recipientId) {
+      const timeZone = await getTimeZoneForUid(recipientId);
+      const sent = await trySendSmsToUid(iprog, recipientId, buildBody(timeZone));
+      if (sent.ok) {
+        functions.logger.info("IPROG SMS queued", {
+          recipientId,
+          type,
+          phone: sent.phone,
+          result: sent.result,
+        });
+      }
+      return null;
+    }
+
+    const familyName =
+      typeof data?.familyName === "string" && data.familyName.trim()
+        ? data.familyName.trim()
+        : "";
+    if (FAMILY_BROADCAST_SMS_TYPES.has(type) && familyName) {
+      await broadcastSmsToFamily(familyName, buildBody);
+      await snap.ref.set(
+        { smsBroadcastAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
     }
     return null;
   });
@@ -765,6 +1057,43 @@ exports.sendEmailOnScanEventCreate = onDocumentCreated(
   }
 );
 
+/** SMS for `ScanEvents` (school check-in / check-out) — mirrors sendEmailOnScanEventCreate. */
+exports.sendSmsOnScanEventCreate = functions.firestore
+  .document("ScanEvents/{docId}")
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    if (data.smsSentAt != null) {
+      return null;
+    }
+    const familyName =
+      typeof data?.familyName === "string" && data.familyName.trim()
+        ? data.familyName.trim()
+        : "";
+    if (!familyName) {
+      return null;
+    }
+    const iprog = getIprogConfig();
+    if (!iprog) {
+      return null;
+    }
+    try {
+      const scheduleIndex = await loadScheduledChildNamesIndex(familyName);
+      await broadcastSmsToFamily(familyName, (timeZone) =>
+        buildScanPickupLogSmsBody(data, scheduleIndex, timeZone)
+      );
+      await snap.ref.set(
+        { smsSentAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } catch (e) {
+      functions.logger.error("Scan SMS handler failed", {
+        docId: snap.id,
+        err: String(e),
+      });
+    }
+    return null;
+  });
+
 function normalizeEmailInput(email) {
   return String(email || "").trim();
 }
@@ -984,5 +1313,72 @@ exports.sendNotificationDigestEmails = onCall(
       }
     }
     return { emailedIds };
+  }
+);
+
+/**
+ * Callable: Pick Up Log digest SMS to the signed-in user's phone (same shape as email digest).
+ */
+exports.sendNotificationDigestSms = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const uid = request.auth.uid;
+    const enabled = await isSmsNotificationsEnabledForUid(uid);
+    if (!enabled) {
+      return { smsIds: [] };
+    }
+    const iprog = getIprogConfig();
+    if (!iprog) {
+      throw new HttpsError("failed-precondition", "SMS provider is not configured on the server.");
+    }
+    const rawPhone = await getContactNumberForUid(uid);
+    if (!rawPhone) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Add a contact number in Settings to receive SMS."
+      );
+    }
+    const phone = toIprogPhone(rawPhone);
+    if (!phone) {
+      throw new HttpsError("failed-precondition", "Contact number format is invalid for SMS.");
+    }
+    const rawItems = request.data?.items;
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return { smsIds: [] };
+    }
+    const max = 30;
+    const items = rawItems.slice(0, max).map((row) => {
+      const r = row;
+      return {
+        id: String(r.id ?? ""),
+        title: String(r.title ?? ""),
+        displayMessage: String(r.displayMessage ?? ""),
+        time: String(r.time ?? ""),
+        type: String(r.type ?? ""),
+      };
+    });
+    const smsIds = [];
+    for (const n of items) {
+      if (!n.id) {
+        continue;
+      }
+      const body =
+        String(n.displayMessage || "").trim() ||
+        joinPickupLogSmsLines([
+          notificationKindLabel(n.type),
+          n.title,
+          `Time: ${n.time}`,
+        ]);
+      try {
+        await sendOneIprogSms(iprog.apiToken, phone, body);
+        smsIds.push(n.id);
+      } catch (e) {
+        functions.logger.error("IPROG digest SMS failed", { id: n.id, err: String(e) });
+      }
+    }
+    return { smsIds };
   }
 );
