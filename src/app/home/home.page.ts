@@ -8,6 +8,7 @@ import { RoleAccessService, UserRole } from '../services/role-access.service';
 import { PanicService } from '../services/panic.service';
 import { NotificationService } from '../services/notification.service';
 import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
+import { OfflineCacheKeys, OfflineCacheService } from '../services/offline-cache.service';
 import { Firestore, collection, query, where, getDocs } from '@angular/fire/firestore';
 
 interface WeatherData {
@@ -52,6 +53,7 @@ export class HomePage implements OnInit {
   upcomingPickups: any[] = [];
   userHasFamily: boolean = false;
   userRole: UserRole | null = null;
+  showingOfflinePickups = false;
 
   private readonly WEATHER_API_KEY = '6549deb0d8bf8eb1d35194b5b7e02e43';
 
@@ -65,7 +67,8 @@ export class HomePage implements OnInit {
     private firestore: Firestore,
     private panicService: PanicService,
     private notificationService: NotificationService,
-    private scheduleExitScanSync: ScheduleExitScanSyncService
+    private scheduleExitScanSync: ScheduleExitScanSyncService,
+    private offlineCache: OfflineCacheService
   ) { }
 
   async ngOnInit() {
@@ -258,6 +261,7 @@ export class HomePage implements OnInit {
       this.currentUser = this.authService.getCurrentUser();
       if (!this.currentUser) {
         this.upcomingPickups = [];
+        this.showingOfflinePickups = false;
         return;
       }
       if (!this.userHasFamily) {
@@ -265,66 +269,85 @@ export class HomePage implements OnInit {
       }
       if (!this.userHasFamily) {
         this.upcomingPickups = [];
+        this.showingOfflinePickups = false;
         return;
       }
 
       const family = await this.familyService.getUserFamily();
       if (!family) {
-        this.upcomingPickups = [];
+        const cached = this.offlineCache.load<any[]>(OfflineCacheKeys.homePickups(''));
+        if (cached?.length) {
+          this.upcomingPickups = cached;
+          this.showingOfflinePickups = true;
+          this.offlineCache.setBannerActive(true);
+        } else {
+          this.upcomingPickups = [];
+          this.showingOfflinePickups = false;
+        }
         return;
       }
 
-      await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
-
-      const schedulesCollection = collection(this.firestore, 'Schedules');
-      const allSchedulesQuery = query(
-        schedulesCollection,
-        where('Family Name', '==', family.name)
-      );
-
-      const querySnapshot = await getDocs(allSchedulesQuery);
-      const pending: HomePickupRow[] = [];
-
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data() as any;
-        const status = data['Status'] || 'pending';
-        if (status !== 'pending') return;
-
-        const dateYmd = this.scheduleDateYmdFromFirestore(data['Date']);
-        pending.push({
-          id: docSnap.id,
-          date: dateYmd || String(data['Date'] || ''),
-          time: data['Time'] || '',
-          days: data['Days'] || '',
-          fetcherName: data['Companions Name'] || '',
-          childName: data['Childs Name'] || '',
-          childGrade: data['Childs Grade'] || '',
-          parentName: data['Parent Name'] || '',
-          status,
-          createdAt: data['Created At'],
-          fetcherUID: String(data['Fetcher UID'] || ''),
-        });
+      const cacheKey = OfflineCacheKeys.homePickups(family.name);
+      const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, async () => {
+        if (this.offlineCache.isOnline()) {
+          await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
+        }
+        return this.fetchUpcomingPickupsForFamily(family.name);
       });
-
-      const merged = this.mergeDuplicatePickups(pending);
-      // Drop pending rows whose slot has already passed — they're missed
-      // pickups, not upcoming ones, and belong on the Pick Up Log instead.
-      const upcomingOnly = merged.filter((row) => this.isUpcomingPickupSlot(row));
-      upcomingOnly.sort((a, b) => this.compareSchedulesChronologically(a, b));
-
-      this.upcomingPickups = upcomingOnly.map((row) => ({
-        id: row.id,
-        date: row.date,
-        time: row.time,
-        days: row.days,
-        fetcherName: row.fetcherName,
-        childName: row.childName,
-        childGrade: row.childGrade,
-        parentName: row.parentName,
-        status: row.status,
-      }));
-    } catch (error) {
+      this.upcomingPickups = result.data;
+      this.showingOfflinePickups = result.fromCache;
+    } catch {
+      this.upcomingPickups = [];
+      this.showingOfflinePickups = false;
     }
+  }
+
+  private async fetchUpcomingPickupsForFamily(familyName: string): Promise<any[]> {
+    const schedulesCollection = collection(this.firestore, 'Schedules');
+    const allSchedulesQuery = query(
+      schedulesCollection,
+      where('Family Name', '==', familyName)
+    );
+
+    const querySnapshot = await getDocs(allSchedulesQuery);
+    const pending: HomePickupRow[] = [];
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data() as any;
+      const status = data['Status'] || 'pending';
+      if (status !== 'pending') return;
+
+      const dateYmd = this.scheduleDateYmdFromFirestore(data['Date']);
+      pending.push({
+        id: docSnap.id,
+        date: dateYmd || String(data['Date'] || ''),
+        time: data['Time'] || '',
+        days: data['Days'] || '',
+        fetcherName: data['Companions Name'] || '',
+        childName: data['Childs Name'] || '',
+        childGrade: data['Childs Grade'] || '',
+        parentName: data['Parent Name'] || '',
+        status,
+        createdAt: data['Created At'],
+        fetcherUID: String(data['Fetcher UID'] || ''),
+      });
+    });
+
+    const merged = this.mergeDuplicatePickups(pending);
+    const upcomingOnly = merged.filter((row) => this.isUpcomingPickupSlot(row));
+    upcomingOnly.sort((a, b) => this.compareSchedulesChronologically(a, b));
+
+    return upcomingOnly.map((row) => ({
+      id: row.id,
+      date: row.date,
+      time: row.time,
+      days: row.days,
+      fetcherName: row.fetcherName,
+      childName: row.childName,
+      childGrade: row.childGrade,
+      parentName: row.parentName,
+      status: row.status,
+    }));
   }
 
   private async loadWeatherData() {

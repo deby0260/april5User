@@ -2,6 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { Firestore, collection, query, where, getDocs, onSnapshot } from '@angular/fire/firestore';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { OfflineCacheKeys, OfflineCacheService } from './offline-cache.service';
 
 /**
  * Segment of a notification title — used so the template can render names
@@ -51,6 +52,7 @@ const DISMISSED_PICKUP_DOC_IDS_KEY = 'fetchsafe-notification-log-dismissed-picku
 @Injectable({ providedIn: 'root' })
 export class PickupNotificationLogLoaderService implements OnDestroy {
   readonly rows$ = new BehaviorSubject<PickupLogNotificationRow[]>([]);
+  readonly fromOfflineCache$ = new BehaviorSubject<boolean>(false);
 
   private familyName: string | null = null;
   private unsubs: Array<() => void> = [];
@@ -58,7 +60,10 @@ export class PickupNotificationLogLoaderService implements OnDestroy {
   private readonly refreshTrigger$ = new BehaviorSubject<void>(undefined);
   private started = false;
 
-  constructor(private firestore: Firestore) {}
+  constructor(
+    private firestore: Firestore,
+    private offlineCache: OfflineCacheService
+  ) {}
 
   ngOnDestroy(): void {
     this.stop();
@@ -493,6 +498,28 @@ export class PickupNotificationLogLoaderService implements OnDestroy {
   }
 
   private async loadMerged(familyName: string): Promise<void> {
+    const cacheKey = OfflineCacheKeys.pickupLog(familyName);
+    try {
+      const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, () =>
+        this.fetchMergedRows(familyName)
+      );
+      this.fromOfflineCache$.next(result.fromCache);
+      this.rows$.next(result.data);
+      return;
+    } catch {
+      const cached = this.offlineCache.load<PickupLogNotificationRow[]>(cacheKey);
+      if (cached?.length) {
+        this.fromOfflineCache$.next(true);
+        this.offlineCache.setBannerActive(true);
+        this.rows$.next(cached);
+        return;
+      }
+      this.fromOfflineCache$.next(false);
+      this.rows$.next([]);
+    }
+  }
+
+  private async fetchMergedRows(familyName: string): Promise<PickupLogNotificationRow[]> {
     try {
       const notificationsCollection = collection(this.firestore, 'Notifications');
       const q = query(
@@ -561,9 +588,9 @@ export class PickupNotificationLogLoaderService implements OnDestroy {
         return dateB - dateA;
       });
 
-      this.rows$.next(merged);
+      return merged;
     } catch {
-      this.rows$.next([]);
+      return [];
     }
   }
 }

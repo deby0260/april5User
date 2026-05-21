@@ -5,6 +5,7 @@
       <p>Loading family data...</p>
     </div>
 
+    <p class="offline-page-hint" *ngIf="showingOfflineFamily && !isLoading">Saved from your last online visit</p>
     <div *ngIf="!isLoading" class="family-info-section">
       <h1 class="family-name">{{ familyData.familyName }}</h1>
       <p class="created-date" *ngIf="familyData.createdDate">Created on {{ familyData.createdDate }}</p>

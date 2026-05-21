@@ -4,6 +4,7 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { AuthService } from './auth';
 import { JoinRequestService } from './join-request.service';
+import { OfflineCacheKeys, OfflineCacheService } from './offline-cache.service';
 
 /** Same shape as `Notification` in notifications.page.ts (kept minimal for the feed). */
 export interface InboxFeedItem {
@@ -41,6 +42,7 @@ export class NotificationInboxFeedService {
 
   readonly inbox$ = new BehaviorSubject<InboxFeedItem[]>([]);
   readonly inboxLoading$ = new BehaviorSubject<boolean>(true);
+  readonly fromOfflineCache$ = new BehaviorSubject<boolean>(false);
 
   private uid: string | null = null;
   private unsubs: Array<() => void> = [];
@@ -50,7 +52,8 @@ export class NotificationInboxFeedService {
   constructor(
     private firestore: Firestore,
     private authService: AuthService,
-    private joinRequestService: JoinRequestService
+    private joinRequestService: JoinRequestService,
+    private offlineCache: OfflineCacheService
   ) {}
 
   stop(): void {
@@ -110,15 +113,27 @@ export class NotificationInboxFeedService {
       return [];
     }
     this.inboxLoading$.next(true);
+    const cacheKey = OfflineCacheKeys.inbox(currentUser.uid);
     try {
-      const [announcementItems, userItems] = await Promise.all([
-        this.fetchAnnouncements(currentUser),
-        this.loadUserNotificationItems(currentUser.uid),
-      ]);
-      const merged = [...announcementItems, ...userItems].sort((a, b) => b.sortTime - a.sortTime);
-      this.inbox$.next(merged);
-      return merged;
+      const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, async () => {
+        const [announcementItems, userItems] = await Promise.all([
+          this.fetchAnnouncements(currentUser),
+          this.loadUserNotificationItems(currentUser.uid),
+        ]);
+        return [...announcementItems, ...userItems].sort((a, b) => b.sortTime - a.sortTime);
+      });
+      this.fromOfflineCache$.next(result.fromCache);
+      this.inbox$.next(result.data);
+      return result.data;
     } catch {
+      const cached = this.offlineCache.load<InboxFeedItem[]>(cacheKey);
+      if (cached?.length) {
+        this.fromOfflineCache$.next(true);
+        this.offlineCache.setBannerActive(true);
+        this.inbox$.next(cached);
+        return cached;
+      }
+      this.fromOfflineCache$.next(false);
       this.inbox$.next([]);
       return [];
     } finally {

@@ -1,9 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Firestore, collection, query, where, getDocs, updateDoc, deleteDoc } from '@angular/fire/firestore';
-import { AuthService } from '../services/auth';
+import { AuthService, UserData } from '../services/auth';
 import { FamilyService, FamilyMember } from '../services/family.service';
 import { RoleAccessService } from '../services/role-access.service';
+import { OfflineCacheKeys, OfflineCacheService } from '../services/offline-cache.service';
 import { LoadingController, ToastController, AlertController } from '@ionic/angular';
 
 interface Child {
@@ -41,6 +42,7 @@ export class CreatedFamilyPage implements OnInit {
   isLoading: boolean = true;
   currentUserRole: string = '';
   canManageFamily: boolean = false;
+  showingOfflineFamily = false;
 
   constructor(
     private router: Router,
@@ -50,7 +52,8 @@ export class CreatedFamilyPage implements OnInit {
     private roleAccessService: RoleAccessService,
     private loadingController: LoadingController,
     private toastController: ToastController,
-    private alertController: AlertController
+    private alertController: AlertController,
+    private offlineCache: OfflineCacheService
   ) {}
 
   async ngOnInit() {
@@ -129,99 +132,117 @@ export class CreatedFamilyPage implements OnInit {
         return;
       }
 
-      const familiesCol = collection(this.firestore, 'List Of Families');
-      let q = query(familiesCol, where('Family Name', '==', family.name));
-      let snap = await getDocs(q);
-
-      if (snap.empty) {
-        q = query(familiesCol, where('familyName', '==', family.name));
-        snap = await getDocs(q);
-      }
-
-      let effectiveFamilyName = family.name;
-      let earliestDate: Date | null = null;
-      const membersFromDocs: FamilyMember[] = [];
-      let createdDateString = '';
-
-      snap.forEach((d) => {
-        const data = d.data();
-
-        const famNameDoc = this.pick(data, 'Family Name', 'familyName');
-        if (famNameDoc) effectiveFamilyName = famNameDoc;
-
-        const createdAt = this.toJsDate(this.pick(data, 'Date Created', 'dateCreated'));
-        if (createdAt && (!earliestDate || createdAt < earliestDate)) earliestDate = createdAt;
-
-        const parentName = this.pick(data, 'Parent Full Name', 'parentFullName', 'nameOfTheCreator');
-        const parentEmail = this.pick(data, 'Parent Email', 'parentEmail');
-        const parentContact = this.pick(data, 'Parent Contact Number', 'parentContactNumber');
-        const parentPhoto = this.pick(data, 'Parent Profile Picture', 'parentProfilePicture');
-        const uid = this.pick(data, 'uid');
-        const normalizedRole = this.normalizeRole(this.pick(data, 'role'));
-        const role = (normalizedRole === 'member' ? 'companion' : normalizedRole) as 'owner' | 'parent' | 'companion';
-
-        if (parentName || parentEmail) {
-          membersFromDocs.push({
-            id: uid || '',
-            uid: uid || '',
-            name: parentName || 'Parent',
-            email: parentEmail || '',
-            contactNumber: parentContact || '',
-            profilePicture: parentPhoto || '',
-            role,
-            joinedDate: createdAt
-          });
-        }
-      });
-
-      const childrenRecords = await this.familyService.getFamilyChildren(
-        effectiveFamilyName,
-        currentUser.uid
+      const cacheKey = OfflineCacheKeys.family(family.name);
+      const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, () =>
+        this.fetchFamilyDataFromNetwork(family.name, currentUser)
       );
-      const children: Child[] = childrenRecords.map((c) => ({
-        name: c.name,
-        gradeLevel: c.grade || '',
-        profilePicture: c.profilePicture || '',
-        dateCreated: earliestDate,
-        isVerified: !!c.isVerified
-      }));
-
-      const svcMembers = await this.familyService.getFamilyMembers(effectiveFamilyName);
-
-      const mergeMap = new Map<string, FamilyMember>();
-      const keyOf = (m: FamilyMember) =>
-        m.uid ? `uid:${m.uid}` : m.email ? `email:${m.email}` : Math.random().toString();
-
-      [...svcMembers, ...membersFromDocs].forEach(m => {
-        const normalizedRole = this.normalizeRole(m.role);
-        const role = (normalizedRole === 'member' ? 'companion' : normalizedRole) as 'owner' | 'parent' | 'companion';
-        const norm: FamilyMember = { ...m, role };
-        const k = keyOf(norm);
-        if (!mergeMap.has(k)) {
-          mergeMap.set(k, norm);
-        } else {
-          const prev = mergeMap.get(k)!;
-          mergeMap.set(k, this.mergePreferringHigherRole(prev, norm));
-        }
-      });
-
-      if (earliestDate) {
-        createdDateString = (earliestDate as Date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      }
-
-      this.familyData = {
-        familyName: effectiveFamilyName,
-        createdDate: createdDateString,
-        children,
-        parentName: currentUser.fullName || 'Parent',
-        members: Array.from(mergeMap.values())
-      };
-
+      this.familyData = result.data;
+      this.showingOfflineFamily = result.fromCache;
     } catch (error) {
       this.showToast('Error loading family data');
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async fetchFamilyDataFromNetwork(
+    familyName: string,
+    currentUser: UserData
+  ): Promise<FamilyData> {
+    const familiesCol = collection(this.firestore, 'List Of Families');
+    let q = query(familiesCol, where('Family Name', '==', familyName));
+    let snap = await getDocs(q);
+
+    if (snap.empty) {
+      q = query(familiesCol, where('familyName', '==', familyName));
+      snap = await getDocs(q);
+    }
+
+    let effectiveFamilyName = familyName;
+    let earliestDate: Date | null = null;
+    const membersFromDocs: FamilyMember[] = [];
+    let createdDateString = '';
+
+    snap.forEach((d) => {
+      const data = d.data();
+
+      const famNameDoc = this.pick(data, 'Family Name', 'familyName');
+      if (famNameDoc) effectiveFamilyName = famNameDoc;
+
+      const createdAt = this.toJsDate(this.pick(data, 'Date Created', 'dateCreated'));
+      if (createdAt && (!earliestDate || createdAt < earliestDate)) earliestDate = createdAt;
+
+      const parentName = this.pick(data, 'Parent Full Name', 'parentFullName', 'nameOfTheCreator');
+      const parentEmail = this.pick(data, 'Parent Email', 'parentEmail');
+      const parentContact = this.pick(data, 'Parent Contact Number', 'parentContactNumber');
+      const parentPhoto = this.pick(data, 'Parent Profile Picture', 'parentProfilePicture');
+      const uid = this.pick(data, 'uid');
+      const normalizedRole = this.normalizeRole(this.pick(data, 'role'));
+      const role = (normalizedRole === 'member' ? 'companion' : normalizedRole) as 'owner' | 'parent' | 'companion';
+
+      if (parentName || parentEmail) {
+        membersFromDocs.push({
+          id: uid || '',
+          uid: uid || '',
+          name: parentName || 'Parent',
+          email: parentEmail || '',
+          contactNumber: parentContact || '',
+          profilePicture: parentPhoto || '',
+          role,
+          joinedDate: createdAt,
+        });
+      }
+    });
+
+    const childrenRecords = await this.familyService.getFamilyChildren(
+      effectiveFamilyName,
+      currentUser.uid
+    );
+    const children: Child[] = childrenRecords.map((c) => ({
+      name: c.name,
+      gradeLevel: c.grade || '',
+      profilePicture: c.profilePicture || '',
+      dateCreated: earliestDate,
+      isVerified: !!c.isVerified,
+    }));
+
+    const svcMembers = await this.familyService.getFamilyMembers(effectiveFamilyName);
+
+    const mergeMap = new Map<string, FamilyMember>();
+    const keyOf = (m: FamilyMember) =>
+      m.uid ? `uid:${m.uid}` : m.email ? `email:${m.email}` : Math.random().toString();
+
+    [...svcMembers, ...membersFromDocs].forEach((m) => {
+      const normalizedRole = this.normalizeRole(m.role);
+      const role = (normalizedRole === 'member' ? 'companion' : normalizedRole) as
+        | 'owner'
+        | 'parent'
+        | 'companion';
+      const norm: FamilyMember = { ...m, role };
+      const k = keyOf(norm);
+      if (!mergeMap.has(k)) {
+        mergeMap.set(k, norm);
+      } else {
+        const prev = mergeMap.get(k)!;
+        mergeMap.set(k, this.mergePreferringHigherRole(prev, norm));
+      }
+    });
+
+    if (earliestDate) {
+      createdDateString = (earliestDate as Date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+
+    return {
+      familyName: effectiveFamilyName,
+      createdDate: createdDateString,
+      children,
+      parentName: currentUser.fullName || 'Parent',
+      members: Array.from(mergeMap.values()),
+    };
   }
 
   async showToast(message: string) {

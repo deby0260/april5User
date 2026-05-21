@@ -92,6 +92,7 @@
     </div>
 
     <div class="upcoming-section">
+      <p class="offline-page-hint" *ngIf="showingOfflinePickups">Saved from your last online visit</p>
       <div class="section-header">
         <h2>Upcoming Pickups</h2>
         <a (click)="navigateToViewSchedule()"

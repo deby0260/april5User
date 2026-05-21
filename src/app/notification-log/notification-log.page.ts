@@ -43,6 +43,7 @@ export class NotificationLogPage implements OnInit, OnDestroy {
   readonly notificationPageSize = 10;
 
   isLoading: boolean = false;
+  showingOfflineLog = false;
 
   detailModalOpen = false;
   detailNotification: PickupNotification | null = null;
@@ -73,6 +74,11 @@ export class NotificationLogPage implements OnInit, OnDestroy {
           this.notificationPage = this.totalPages();
         }
         this.rebuildGroupedNotifications();
+      })
+    );
+    this.rowsSub.add(
+      this.pickupNotificationLogLoader.fromOfflineCache$.subscribe((fromCache) => {
+        this.showingOfflineLog = fromCache;
       })
     );
     await this.createMissingNotificationLogs();

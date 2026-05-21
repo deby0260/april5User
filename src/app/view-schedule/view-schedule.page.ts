@@ -9,6 +9,7 @@ import { NotificationService } from '../services/notification.service';
 import { LoadingController, ToastController, AlertController } from '@ionic/angular';
 import { RoleAccessService, UserRole } from '../services/role-access.service';
 import { ScheduleExitScanSyncService } from '../services/schedule-exit-scan-sync.service';
+import { OfflineCacheKeys, OfflineCacheService } from '../services/offline-cache.service';
 
 interface ScheduleItem {
   id: string;
@@ -50,6 +51,7 @@ export class ViewSchedulePage implements OnInit {
   /** HH:mm for ion-input type="time" */
   editTime = '';
   savingInlineEdit = false;
+  showingOfflineSchedules = false;
   private autoCompleteInterval: any;
 
   constructor(
@@ -64,7 +66,8 @@ export class ViewSchedulePage implements OnInit {
     private toastController: ToastController,
     private alertController: AlertController,
     private roleAccessService: RoleAccessService,
-    private scheduleExitScanSync: ScheduleExitScanSyncService
+    private scheduleExitScanSync: ScheduleExitScanSyncService,
+    private offlineCache: OfflineCacheService
   ) { }
 
   async ngOnInit() {
@@ -315,67 +318,30 @@ export class ViewSchedulePage implements OnInit {
         return;
       }
 
-      
       const family = await this.familyService.getUserFamily();
       if (!family) {
         return;
       }
 
       this.familyName = family.name;
+      const cacheKey = OfflineCacheKeys.schedules(family.name);
 
-      await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
-
-      
-      const schedulesCollection = collection(this.firestore, 'Schedules');
-      const familySchedulesQuery = query(
-        schedulesCollection,
-        where('Family Name', '==', family.name)
-      );
-      
-      const querySnapshot = await getDocs(familySchedulesQuery);
-
-      this.schedules = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        const scheduleStatus = data['Status'] || 'pending';
-        const scheduleDate = data['Date'] || '';
-
-        
-        if (scheduleStatus === 'pending') {
-          this.schedules.push({
-            id: doc.id,
-            date: data['Date'] || '',
-            time: data['Time'] || '',
-            days: data['Days'] || '',
-            fetcherName: data['Companions Name'] || '',
-            fetcherUID: data['Fetcher UID'] || '',
-            companionName: data['Companions Name'] || '',
-            parentName: data['Parent Name'] || '',
-            childName: data['Childs Name'] || '',
-            childGrade: data['Childs Grade'] || '',
-            familyName: data['Family Name'] || '',
-            createdAt: data['Created At'],
-            status: scheduleStatus,
-            completedAt: data['Completed At'],
-            completedBy: data['Completed By']
-          });
-        } else {
+      const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, async () => {
+        if (this.offlineCache.isOnline()) {
+          await this.scheduleExitScanSync.syncExitScansToCompletedSchedules(family.name);
         }
+        return this.fetchPendingSchedules(family.name);
       });
 
-      this.schedules = this.mergeDuplicateSchedules(this.schedules);
+      this.schedules = result.data;
+      this.showingOfflineSchedules = result.fromCache;
 
-      // Soonest pickup first: calendar date, then time of day (not createdAt / doc order)
-      this.schedules.sort((a, b) => this.compareSchedulesChronologically(a, b));
-
-      await this.loadFamilyPickersForEdit();
-
-      // Fetcher devices: register 30-min-before local reminders without requiring
-      // the user to open this page first (also synced from Home / login).
-      await this.notificationService.syncPendingPickupReminders30mForCurrentUser({
-        force: !silent,
-      });
+      if (!result.fromCache) {
+        await this.loadFamilyPickersForEdit();
+        await this.notificationService.syncPendingPickupReminders30mForCurrentUser({
+          force: !silent,
+        });
+      }
 
     } catch (error) {
     } finally {
@@ -383,6 +349,46 @@ export class ViewSchedulePage implements OnInit {
         this.isLoading = false;
       }
     }
+  }
+
+  private async fetchPendingSchedules(familyName: string): Promise<ScheduleItem[]> {
+    const schedulesCollection = collection(this.firestore, 'Schedules');
+    const familySchedulesQuery = query(
+      schedulesCollection,
+      where('Family Name', '==', familyName)
+    );
+
+    const querySnapshot = await getDocs(familySchedulesQuery);
+    const rows: ScheduleItem[] = [];
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const scheduleStatus = data['Status'] || 'pending';
+      if (scheduleStatus !== 'pending') {
+        return;
+      }
+      rows.push({
+        id: docSnap.id,
+        date: data['Date'] || '',
+        time: data['Time'] || '',
+        days: data['Days'] || '',
+        fetcherName: data['Companions Name'] || '',
+        fetcherUID: data['Fetcher UID'] || '',
+        companionName: data['Companions Name'] || '',
+        parentName: data['Parent Name'] || '',
+        childName: data['Childs Name'] || '',
+        childGrade: data['Childs Grade'] || '',
+        familyName: data['Family Name'] || '',
+        createdAt: data['Created At'],
+        status: scheduleStatus,
+        completedAt: data['Completed At'],
+        completedBy: data['Completed By'],
+      });
+    });
+
+    const merged = this.mergeDuplicateSchedules(rows);
+    merged.sort((a, b) => this.compareSchedulesChronologically(a, b));
+    return merged;
   }
 
   getFormattedDate(dateString: string): string {

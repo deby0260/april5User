@@ -58,6 +58,7 @@ export class NotificationsPage implements OnInit, OnDestroy {
 
   notifications: Notification[] = [];
   isLoading: boolean = false;
+  showingOfflineInbox = false;
   detailModalOpen = false;
   detailNotification: Notification | null = null;
   private inboxSub = new Subscription();
@@ -86,6 +87,11 @@ export class NotificationsPage implements OnInit, OnDestroy {
     this.inboxSub.add(
       this.notificationInboxFeed.inboxLoading$.subscribe((loading) => {
         this.isLoading = loading;
+      })
+    );
+    this.inboxSub.add(
+      this.notificationInboxFeed.fromOfflineCache$.subscribe((fromCache) => {
+        this.showingOfflineInbox = fromCache;
       })
     );
     await this.notificationFeedsBackground.ensureRunning();

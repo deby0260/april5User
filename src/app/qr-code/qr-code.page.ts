@@ -3,6 +3,7 @@ import { Location } from '@angular/common';
 import { ToastController } from '@ionic/angular';
 import { AuthService, UserData } from '../services/auth';
 import { FamilyService } from '../services/family.service';
+import { OfflineCacheService } from '../services/offline-cache.service';
 
 import {
   Firestore,
@@ -11,6 +12,16 @@ import {
   query,
   where,
 } from '@angular/fire/firestore';
+
+interface QrCachePayload {
+  imageUrl?: string;
+  imageDataUrl?: string;
+  websiteUrl?: string;
+  data?: unknown;
+  timestamp?: number;
+  userId?: string;
+  expiresAt?: number;
+}
 
 @Component({
   selector: 'app-qr-code',
@@ -24,7 +35,6 @@ export class QrCodePage implements OnInit {
   currentUser: UserData | null = null;
   isLoading = false;
 
-  private readonly QR_STORAGE_KEY = 'fetchsafe_qr_data_v2';
   private readonly QR_EXPIRY_HOURS = 24;
   private isUsingCachedQR = false;
   private onlineListener?: () => void;
@@ -47,7 +57,8 @@ export class QrCodePage implements OnInit {
     private afs: Firestore,
     private authService: AuthService,
     private familyService: FamilyService,
-    private toastController: ToastController
+    private toastController: ToastController,
+    private offlineCache: OfflineCacheService
   ) {}
 
   async ngOnInit() {
@@ -56,7 +67,7 @@ export class QrCodePage implements OnInit {
     if (this.currentUser) {
       // If we're offline, show the last cached QR (image data URL) so guards can still scan.
       const cached = this.loadCachedQRCode();
-      if (!navigator.onLine) {
+      if (!this.offlineCache.isOnline()) {
         if (this.isQRCodeValid(cached) && cached?.imageDataUrl) {
           this.qrCodeImageUrl = cached.imageDataUrl;
           this.qrPattern = [];
@@ -373,6 +384,10 @@ export class QrCodePage implements OnInit {
   }
 
   private cacheQRCode(imageUrl: string, imageDataUrl: string, websiteUrl: string, data: any): void {
+    const uid = this.currentUser?.uid;
+    if (!uid) {
+      return;
+    }
     const now = Date.now();
     const payload = {
       imageUrl,
@@ -380,22 +395,40 @@ export class QrCodePage implements OnInit {
       websiteUrl,
       data,
       timestamp: now,
-      userId: this.currentUser?.uid,
+      userId: uid,
       expiresAt: now + this.QR_EXPIRY_HOURS * 60 * 60 * 1000,
     };
-    localStorage.setItem(this.QR_STORAGE_KEY, JSON.stringify(payload));
+    this.offlineCache.saveQrPayload(uid, payload);
   }
-  private loadCachedQRCode(): any | null {
-    try { const s = localStorage.getItem(this.QR_STORAGE_KEY); return s ? JSON.parse(s) : null; }
-    catch { return null; }
+
+  private loadCachedQRCode(): QrCachePayload | null {
+    const uid = this.currentUser?.uid;
+    if (!uid) {
+      return null;
+    }
+    return this.offlineCache.loadQrPayload(uid) as QrCachePayload | null;
   }
-  private isQRCodeValid(cached: any): boolean {
+
+  private isQRCodeValid(cached: QrCachePayload | null): boolean {
     if (!cached) return false;
-    if (Date.now() > cached.expiresAt) { this.clearCachedQRCode(); return false; }
-    if (cached.userId !== this.currentUser?.uid) { this.clearCachedQRCode(); return false; }
+    const expiresAt = Number(cached.expiresAt);
+    if (!expiresAt || Date.now() > expiresAt) {
+      this.clearCachedQRCode();
+      return false;
+    }
+    if (cached.userId !== this.currentUser?.uid) {
+      this.clearCachedQRCode();
+      return false;
+    }
     return true;
   }
-  private clearCachedQRCode(): void { localStorage.removeItem(this.QR_STORAGE_KEY); }
+
+  private clearCachedQRCode(): void {
+    const uid = this.currentUser?.uid;
+    if (uid) {
+      this.offlineCache.clearQrPayload(uid);
+    }
+  }
 
   async forceRefreshQRCode(): Promise<void> {
     this.clearCachedQRCode();

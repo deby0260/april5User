@@ -6,7 +6,13 @@ import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
 
 // Firebase imports
 import { provideFirebaseApp, initializeApp } from '@angular/fire/app';
-import { provideFirestore, getFirestore } from '@angular/fire/firestore';
+import {
+  provideFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentSingleTabManager,
+} from '@angular/fire/firestore';
+import { getApp } from '@angular/fire/app';
 import { provideAuth, getAuth } from '@angular/fire/auth';
 import { provideAnalytics, getAnalytics } from '@angular/fire/analytics';
 import { provideStorage, getStorage } from '@angular/fire/storage';
@@ -28,7 +34,14 @@ import { ComponentsModule } from './components/components.module';
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     provideFirebaseApp(() => initializeApp(environment.firebase)),
-    provideFirestore(() => getFirestore()),
+    provideFirestore(() => {
+      const app = getApp();
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentSingleTabManager(undefined),
+        }),
+      });
+    }),
     provideAuth(() => getAuth()),
     provideAnalytics(() => getAnalytics()),
     provideStorage(() => getStorage()),
