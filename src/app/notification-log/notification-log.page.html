@@ -44,23 +44,31 @@
   </div>
 </ion-content>
 
-<ion-modal
-  [isOpen]="detailModalOpen"
-  [backdropDismiss]="true"
-  cssClass="notification-log-detail-modal"
-  (didDismiss)="onDetailModalDismiss()">
-  <ng-template>
-    <ion-header class="notification-log-detail-modal__header">
+<!-- Custom overlay (not ion-modal): avoids dark-mode white-on-white and Android height:auto blank card -->
+<div
+  class="pickup-log-detail-root"
+  *ngIf="detailModalOpen && detailNotification as d"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="pickup-log-detail-dialog-title"
+  (click)="closeDetailModal()">
+  <section class="pickup-log-detail-root__panel" (click)="$event.stopPropagation()">
+    <ion-header class="ion-no-border">
       <ion-toolbar>
-        <ion-title class="notification-log-detail-modal__title">{{ detailNotification?.title || 'Details' }}</ion-title>
+        <ion-buttons slot="start">
+          <ion-button fill="clear" aria-label="Close" (click)="closeDetailModal()">
+            <ion-icon slot="icon-only" name="chevron-back"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+        <ion-title id="pickup-log-detail-dialog-title" class="pickup-log-detail-title">{{ d.title || 'Details' }}</ion-title>
         <ion-buttons slot="end">
           <ion-button fill="clear" (click)="closeDetailModal()">Done</ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
-    <ion-content class="notification-log-detail-modal__body ion-padding">
-      <p class="notification-log-detail-modal__time">{{ detailTimestamp(detailNotification) }}</p>
-      <p class="notification-log-detail-modal__text">{{ detailBody }}</p>
-    </ion-content>
-  </ng-template>
-</ion-modal>
+    <div class="pickup-log-detail-scroll ion-padding">
+      <p class="pickup-log-detail-time">{{ detailTimestamp(d) }}</p>
+      <p class="pickup-log-detail-text">{{ detailBody }}</p>
+    </div>
+  </section>
+</div>

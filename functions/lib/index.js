@@ -26,6 +26,7 @@ const SMS_TYPES = new Set([
   "schedule_assignment",
   "pickup_completion",
   "schedule_completion",
+  "panic_alert",
 ]);
 
 function getIprogConfig() {

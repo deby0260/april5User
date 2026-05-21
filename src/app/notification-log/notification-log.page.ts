@@ -411,10 +411,6 @@ export class NotificationLogPage implements OnInit, OnDestroy {
 
   closeDetailModal(): void {
     this.detailModalOpen = false;
-  }
-
-  onDetailModalDismiss(): void {
-    this.detailModalOpen = false;
     this.detailNotification = null;
     this.detailBody = '';
   }
