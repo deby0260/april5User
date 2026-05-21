@@ -214,7 +214,7 @@ ion-modal, ion-popover, ion-alert, ion-loading, ion-toast {
   z-index: 9998 !important;
 }
 
-/* Notification log: centered card modal (not bottom sheet) */
+/* Notification log: centered card modal (not bottom sheet) — always light theme */
 ion-modal.notification-log-detail-modal {
   --width: min(420px, 92vw);
   --height: auto;
@@ -222,36 +222,171 @@ ion-modal.notification-log-detail-modal {
   --border-radius: 16px;
   --backdrop-opacity: 0.5;
   --box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  --background: #ffffff;
+  --ion-background-color: #ffffff;
+  --ion-text-color: #000000;
 }
 
 ion-modal.notification-log-detail-modal::part(content) {
   border-radius: 16px;
+  background: #ffffff;
 }
 
 ion-modal.notification-log-detail-modal ion-toolbar {
-  --background: #fffdfd;
+  --background: #ffffff;
+  --color: #000000;
   --border-width: 0;
   --min-height: 52px;
+}
+
+ion-modal.notification-log-detail-modal ion-button {
+  --color: #000000;
+}
+
+ion-modal.notification-log-detail-modal ion-content.notification-log-detail-modal__body {
+  --background: #ffffff;
+  --color: #000000;
+  color: #000000;
 }
 
 ion-modal.notification-log-detail-modal .notification-log-detail-modal__title {
   font-size: 1rem;
   font-weight: 700;
   padding-inline-end: 8px;
+  color: #000000 !important;
 }
 
 ion-modal.notification-log-detail-modal .notification-log-detail-modal__time {
   font-size: 0.85rem;
-  color: #888;
+  color: #555555 !important;
   margin: 0 0 14px 0;
 }
 
 ion-modal.notification-log-detail-modal .notification-log-detail-modal__text {
   font-size: 1rem;
   line-height: 1.55;
-  color: #222;
+  color: #000000 !important;
   margin: 0;
   white-space: pre-wrap;
+}
+
+/* Password change popup (from notifications) — always light theme */
+ion-modal.password-change-modal-class {
+  --background: #ffffff;
+  --ion-background-color: #ffffff;
+  --ion-text-color: #000000;
+}
+
+ion-modal.password-change-modal-class::part(content) {
+  background: #ffffff;
+}
+
+/* All standard Ionic popups: white card, black text (excludes panic alerts) */
+ion-alert:not(.panic-alert-modal):not(.panic-alert-restricted),
+ion-alert.fetchsafe-light-alert {
+  --background: #ffffff !important;
+  --ion-background-color: #ffffff !important;
+  --ion-text-color: #000000 !important;
+  --color: #000000 !important;
+  color-scheme: light;
+
+  .alert-wrapper {
+    background: #ffffff !important;
+  }
+
+  .alert-head {
+    background: #ffffff !important;
+
+    h2 {
+      color: #000000 !important;
+    }
+  }
+
+  .alert-sub-title {
+    color: #333333 !important;
+  }
+
+  .alert-message {
+    color: #333333 !important;
+  }
+
+  .alert-input-group {
+    background: #ffffff !important;
+  }
+
+  .alert-input,
+  textarea.alert-input {
+    color: #000000 !important;
+    background: #f5f5f5 !important;
+    border-color: #cccccc !important;
+    caret-color: #000000 !important;
+  }
+
+  .alert-radio-group,
+  .alert-checkbox-group {
+    background: #ffffff !important;
+    border-color: #e0e0e0 !important;
+  }
+
+  .alert-radio-label,
+  .alert-checkbox-label {
+    color: #000000 !important;
+  }
+
+  [aria-checked='true'] .alert-radio-label,
+  [aria-checked='true'] .alert-checkbox-label {
+    color: #000000 !important;
+  }
+
+  .alert-radio-icon .alert-icon-inner {
+    border-color: #666666 !important;
+  }
+
+  .alert-button-group {
+    border-color: #e0e0e0 !important;
+  }
+
+  .alert-button {
+    color: #000000 !important;
+    background: #ffffff !important;
+
+    &.alert-button-role-destructive {
+      color: #d32f2f !important;
+    }
+
+    &.alert-button-role-cancel {
+      color: #555555 !important;
+    }
+  }
+}
+
+ion-action-sheet {
+  --background: #ffffff !important;
+  --ion-background-color: #ffffff !important;
+  --color: #000000 !important;
+  --button-color: #000000 !important;
+  --button-background: #ffffff !important;
+  --button-background-selected: #f0f0f0 !important;
+  color-scheme: light;
+
+  .action-sheet-title,
+  .action-sheet-sub-title {
+    color: #000000 !important;
+  }
+
+  .action-sheet-button {
+    color: #000000 !important;
+    background: #ffffff !important;
+
+    &.action-sheet-destructive {
+      color: #d32f2f !important;
+    }
+
+    &.action-sheet-cancel {
+      color: #555555 !important;
+      background: #f5f5f5 !important;
+    }
+  }
 }
 
 /* Ensure ion-content doesn't overlap bottom navigation */

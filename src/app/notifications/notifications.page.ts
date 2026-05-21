@@ -209,6 +209,7 @@ export class NotificationsPage implements OnInit, OnDestroy {
 
     
     const alert = await this.alertController.create({
+      cssClass: 'fetchsafe-light-alert',
       header: 'Approve Join Request',
       message: `${joinRequest.requesterName} wants to join your family "${joinRequest.familyName}". Select their role:`,
       inputs: [

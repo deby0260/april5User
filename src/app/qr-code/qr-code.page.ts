@@ -227,10 +227,10 @@ export class QrCodePage implements OnInit {
       if (!familyName) throw new Error('No family found for this user');
 
       
-      // `fam` duplicates `family` so short links / scanners that clip the query still often retain a working param
+      
       const enc = encodeURIComponent(familyName);
       const auth = encodeURIComponent(this.currentUser.email || '');
-      // `uid` identifies the account that generated this QR (stable; use this on fetchsafe2.web.app to load the user)
+     
       const uidEnc = encodeURIComponent(this.currentUser.uid || '');
       const hostedUrl = `${this.hostedBaseUrl}?family=${enc}&fam=${enc}&authorizer=${auth}&uid=${uidEnc}`;
 
