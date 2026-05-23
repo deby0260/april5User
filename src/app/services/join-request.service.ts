@@ -29,6 +29,7 @@ export interface FamilyNotification {
     | 'schedule_assignment'
     | 'pickup_completion'
     | 'panic_alert'
+    | 'panic_alert_resolved'
     | 'password_change_required';
   title: string;
   message: string;
@@ -200,10 +201,10 @@ export class JoinRequestService {
       );
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as FamilyNotification));
+      return querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }) as FamilyNotification);
     } catch (error) {
       return [];
     }

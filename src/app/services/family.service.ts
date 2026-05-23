@@ -143,7 +143,7 @@ export class FamilyService {
       if (!familyQuerySnapshot.empty) {
         const familyDoc = familyQuerySnapshot.docs[0].data();
         const familyName = familyDoc['Family Name'];
-        const familyRole = familyDoc['Role'] || 'owner';
+        const familyRole = familyDoc['Role'] || familyDoc['role'] || 'companion';
 
         if (familyName) {
           return { familyName, familyRole };

@@ -255,32 +255,67 @@ export class PanicService {
       await addDoc(panicAlertCollection, panicAlertData);
       
       const notificationsCollection = collection(this.firestore, 'Notifications');
-      const alertPromises = [];
+      const alertPromises: Promise<unknown>[] = [];
+
+      const senderName = currentUser.fullName || currentUser.email || 'Family Member';
+      const senderUid = String(currentUser.uid || '').trim();
+      const senderEmail = String(currentUser.email || '').trim().toLowerCase();
+      const notifiedUids = new Set<string>();
+
+      const queuePanicNotification = (
+        recipientId: string,
+        message: string,
+        triggeredBySelf = false
+      ) => {
+        const rid = String(recipientId || '').trim();
+        if (!rid || notifiedUids.has(rid)) {
+          return;
+        }
+        notifiedUids.add(rid);
+        alertPromises.push(
+          addDoc(notificationsCollection, {
+            type: 'panic_alert',
+            title: 'PANIC ALERT',
+            message,
+            recipientId: rid,
+            senderId: currentUser.uid,
+            senderName,
+            familyName: family.name,
+            isRead: false,
+            triggeredBySelf,
+            createdAt: serverTimestamp(),
+          })
+        );
+      };
 
       for (const member of familyMembers) {
-        if (member.uid === currentUser.uid) continue;
+        const memberUid = String(member.uid || '').trim();
+        const memberEmail = String(member.email || '').trim().toLowerCase();
+        if (!memberUid) {
+          continue;
+        }
+        if (memberUid === senderUid) {
+          continue;
+        }
+        if (senderEmail && memberEmail && memberEmail === senderEmail) {
+          continue;
+        }
+        queuePanicNotification(
+          memberUid,
+          `Emergency alert triggered by ${senderName}`
+        );
+      }
 
-        const panicNotificationData = {
-          type: 'panic_alert',
-          title: 'PANIC ALERT',
-          message: `Emergency alert triggered by ${currentUser.fullName || currentUser.email || 'Family Member'}`,
-          recipientId: member.uid,
-          senderId: currentUser.uid,
-          senderName: currentUser.fullName || currentUser.email || 'Family Member',
-          familyName: family.name,
-          isRead: false,
-          createdAt: serverTimestamp()
-        };
-
-        alertPromises.push(addDoc(notificationsCollection, panicNotificationData));
+      // Triggerer also sees the alert in Notifications (confirmation + history).
+      if (senderUid) {
+        queuePanicNotification(
+          senderUid,
+          'You triggered an emergency panic alert. Admin and family have been notified.',
+          true
+        );
       }
 
       await Promise.all(alertPromises);
-
-      await this.notificationService.sendPanicNotification(
-        family.name,
-        currentUser.fullName || currentUser.email || 'Family Member'
-      );
 
       await this.showToast('Emergency alert sent. Admin and family notified.');
       

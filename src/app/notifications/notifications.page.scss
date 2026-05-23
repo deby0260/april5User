@@ -86,6 +86,8 @@
         &.join_denied  { color: #ff3b30; }
         &.password_change_required { color: #ff9500; }
         &.admin_announcement { color: #5856d6; }
+        &.panic_alert { color: #e74c3c; }
+        &.panic_alert_resolved { color: #34c759; }
       }
     }
 
@@ -133,6 +135,15 @@
       .announcement-hint {
         font-size: 11px;
         color: #5856d6;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 6px 0 0 0;
+      }
+
+      .resolved-hint {
+        font-size: 11px;
+        color: #34c759;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;

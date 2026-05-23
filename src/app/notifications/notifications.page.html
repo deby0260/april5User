@@ -32,6 +32,7 @@
           <p class="notification-message">{{ formatNotificationDisplayMessage(notification) }}</p>
 
           <p class="announcement-hint" *ngIf="notification.type === 'admin_announcement'">Admin announcement</p>
+          <p class="resolved-hint" *ngIf="notification.type === 'panic_alert_resolved'">Emergency resolved</p>
 
           <p class="action-hint" *ngIf="notification.type === 'join_request' && (!notification.joinRequestStatus || notification.joinRequestStatus === 'pending')">
             Tap for details

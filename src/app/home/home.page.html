@@ -18,33 +18,35 @@
     <div class="action-cards">
       <div class="card-row">
         <div class="action-card analytics"
-             [class.disabled]="!userRole?.canAccessAnalytics"
+             [class.disabled]="!isParentOnlyFeatureAllowed('canAccessAnalytics')"
+             [attr.aria-disabled]="!isParentOnlyFeatureAllowed('canAccessAnalytics')"
              (click)="navigateToAnalytics()">
           <ion-icon name="bar-chart" class="card-icon"></ion-icon>
           <div class="card-content">
             <h3>View Analytics</h3>
             <p>Monitor Daily Analytics</p>
-            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessAnalytics">
+            <span class="role-requirement" *ngIf="!roleLoading && userRole && !userRole.canAccessAnalytics">
               (Requires Parent Role)
             </span>
           </div>
-          <div class="lock-overlay" *ngIf="!userRole?.canAccessAnalytics">
+          <div class="lock-overlay" *ngIf="!isParentOnlyFeatureAllowed('canAccessAnalytics')">
             <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
           </div>
         </div>
 
         <div class="action-card consent"
-             [class.disabled]="!userRole?.canAccessConsentLetter"
+             [class.disabled]="!isParentOnlyFeatureAllowed('canAccessConsentLetter')"
+             [attr.aria-disabled]="!isParentOnlyFeatureAllowed('canAccessConsentLetter')"
              (click)="navigateToDigitalConsent()">
           <ion-icon name="document-text" class="card-icon"></ion-icon>
           <div class="card-content">
             <h3>Digital Consent</h3>
             <p>Create Digital Consent Letter</p>
-            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessConsentLetter">
+            <span class="role-requirement" *ngIf="!roleLoading && userRole && !userRole.canAccessConsentLetter">
               (Requires Parent Role)
             </span>
           </div>
-          <div class="lock-overlay" *ngIf="!userRole?.canAccessConsentLetter">
+          <div class="lock-overlay" *ngIf="!isParentOnlyFeatureAllowed('canAccessConsentLetter')">
             <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
           </div>
         </div>
@@ -52,17 +54,18 @@
 
       <div class="card-row">
         <div class="action-card schedule"
-             [class.disabled]="!userRole?.canAccessScheduling"
+             [class.disabled]="!isParentOnlyFeatureAllowed('canAccessScheduling')"
+             [attr.aria-disabled]="!isParentOnlyFeatureAllowed('canAccessScheduling')"
              (click)="navigateToSetSchedule()">
           <ion-icon name="calendar" class="card-icon"></ion-icon>
           <div class="card-content">
             <h3>Set Schedule</h3>
             <p>Schedule pickup times</p>
-            <span class="role-requirement" *ngIf="userRole && !userRole.canAccessScheduling">
+            <span class="role-requirement" *ngIf="!roleLoading && userRole && !userRole.canAccessScheduling">
               (Requires Parent Role)
             </span>
           </div>
-          <div class="lock-overlay" *ngIf="!userRole?.canAccessScheduling">
+          <div class="lock-overlay" *ngIf="!isParentOnlyFeatureAllowed('canAccessScheduling')">
             <ion-icon name="lock-closed" class="lock-icon"></ion-icon>
           </div>
         </div>

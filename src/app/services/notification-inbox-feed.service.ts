@@ -20,6 +20,7 @@ export interface InboxFeedItem {
     | 'schedule_assignment'
     | 'pickup_completion'
     | 'panic_alert'
+    | 'panic_alert_resolved'
     | 'password_change_required'
     | 'admin_announcement';
   title: string;
@@ -228,14 +229,37 @@ export class NotificationInboxFeedService {
           }
         }
 
+        const triggeredBySelf =
+          (notification as { triggeredBySelf?: boolean }).triggeredBySelf === true ||
+          (String(notification.senderId || '').trim() &&
+            String(notification.senderId).trim() === String(uid).trim());
+
+        const isSelfPanic = notification.type === 'panic_alert' && triggeredBySelf;
+        const isSelfPanicResolved =
+          notification.type === 'panic_alert_resolved' && triggeredBySelf;
+
+        let message = notification.message;
+        if (isSelfPanic) {
+          message =
+            notification.message ||
+            'You triggered an emergency panic alert. Admin and family have been notified.';
+        } else if (notification.type === 'panic_alert' && notification.senderName) {
+          message = `Emergency alert triggered by ${notification.senderName}`;
+        } else if (isSelfPanicResolved) {
+          message =
+            notification.message ||
+            'Your panic alert has been marked resolved. The emergency is over.';
+        } else if (notification.type === 'panic_alert_resolved') {
+          message =
+            notification.message ||
+            'The panic alert for your family has been resolved. The emergency is over.';
+        }
+
         return {
           id: notification.id || '',
           type: notification.type as InboxFeedItem['type'],
           title: notification.title,
-          message:
-            notification.type === 'panic_alert' && notification.senderName
-              ? `Emergency alert triggered by ${notification.senderName}`
-              : notification.message,
+          message,
           time: this.formatTime(notification.createdAt),
           sortTime: this.getTimestampMs(notification.createdAt),
           isRead: notification.isRead,

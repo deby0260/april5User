@@ -46,27 +46,16 @@ export class RoleAccessService {
       let userRole: 'owner' | 'parent' | 'companion' = 'companion';
 
       if (isOriginalCreator) {
-
         userRole = 'owner';
       } else {
-        // First, check the user's familyRole from getUserFamilyInfo (which checks Registerd collection)
-        const userFamilyInfo = await this.familyService.getUserFamilyInfo();
-        if (userFamilyInfo && userFamilyInfo.familyRole) {
-          const role = userFamilyInfo.familyRole.toLowerCase();
-          if (role === 'parent' || role === 'parents') {
-            userRole = 'parent';
-          } else if (role === 'companion') {
-            userRole = 'companion';
-          } else if (role === 'owner') {
-            userRole = 'owner';
-          }
+        const members = await this.familyService.getFamilyMembers(family.name);
+        const userMember = members.find((member) => member.uid === currentUser.uid);
+        if (userMember) {
+          userRole = userMember.role;
         } else {
-          // Fallback: check List Of Families collection
-          const members = await this.familyService.getFamilyMembers(family.name);
-          const userMember = members.find(member => member.uid === currentUser.uid);
-
-          if (userMember) {
-            userRole = userMember.role;
+          const userFamilyInfo = await this.familyService.getUserFamilyInfo();
+          if (userFamilyInfo?.familyRole) {
+            userRole = this.normalizeFamilyRole(userFamilyInfo.familyRole);
           }
         }
       }
@@ -121,6 +110,20 @@ export class RoleAccessService {
       default:
         return false;
     }
+  }
+
+  private normalizeFamilyRole(raw: string): 'owner' | 'parent' | 'companion' {
+    const role = String(raw || '').trim().toLowerCase();
+    if (role === 'parent' || role === 'parents') {
+      return 'parent';
+    }
+    if (role === 'owner') {
+      return 'owner';
+    }
+    if (role === 'member') {
+      return 'companion';
+    }
+    return 'companion';
   }
 
   private canAccessAnalytics(role: string): boolean {

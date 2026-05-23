@@ -27,6 +27,7 @@ const SMS_TYPES = new Set([
   "pickup_completion",
   "schedule_completion",
   "panic_alert",
+  "panic_alert_resolved",
 ]);
 
 /** Pick Up Log docs often have no recipientId — SMS every opted-in family member. */
@@ -38,6 +39,7 @@ const PUSH_TYPES = new Set([
   "pickup_completion",
   "schedule_completion",
   "panic_alert",
+  "panic_alert_resolved",
 ]);
 const FAMILY_BROADCAST_PUSH_TYPES = new Set(["pickup_completion"]);
 
@@ -320,7 +322,12 @@ function buildPushPayloadFromNotification(data, type) {
     title ||
     "You have an update in FetchSafe.";
   const isPanic = type === "panic_alert";
-  const pushTitle = isPanic ? "PANIC ALERT" : `FetchSafe: ${notificationKindLabel(type)}`;
+  const isPanicResolved = type === "panic_alert_resolved";
+  const pushTitle = isPanic
+    ? "PANIC ALERT"
+    : isPanicResolved
+      ? "Emergency resolved"
+      : `FetchSafe: ${notificationKindLabel(type)}`;
   const pushBody = truncatePushBody(message, 200);
   return {
     title: pushTitle,
@@ -328,11 +335,42 @@ function buildPushPayloadFromNotification(data, type) {
     priority: isPanic ? "high" : "normal",
     data: fcmStringData({
       type: type || "general",
-      actionUrl: isPanic ? "/notifications" : "/notifications",
+      actionUrl: "/notifications",
       familyName: data?.familyName || "",
       notificationTitle: title,
     }),
   };
+}
+
+/** Matches app `PanicService` / emergency banner resolution checks. */
+function isResolvedPanicDoc(data) {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+  const resolvedVal =
+    data.resolved ??
+    data.Resolved ??
+    data.isResolved ??
+    data.is_resolved ??
+    data.resolvedAt ??
+    data.resolved_at;
+  const statusVal = String(data.status ?? data.Status ?? "")
+    .trim()
+    .toLowerCase();
+  const resolvedStr = String(resolvedVal ?? "").trim().toLowerCase();
+  const resolvedTruthy =
+    resolvedVal === true ||
+    resolvedVal === 1 ||
+    resolvedVal === "1" ||
+    resolvedVal === "true" ||
+    resolvedStr === "resolved" ||
+    resolvedStr === "yes";
+  return (
+    resolvedTruthy ||
+    statusVal === "resolved" ||
+    statusVal === "inactive" ||
+    statusVal === "closed"
+  );
 }
 
 async function trySendPushToUid(uid, payload) {
@@ -747,6 +785,8 @@ function notificationKindLabel(typeRaw) {
       return "Pickup";
     case "panic_alert":
       return "Emergency";
+    case "panic_alert_resolved":
+      return "Emergency resolved";
     case "request":
       return "Request";
     case "success":
@@ -1345,6 +1385,92 @@ exports.sendPushOnScanEventCreate = functions.firestore
     } catch (e) {
       functions.logger.error("Scan push handler failed", { docId: snap.id, err: String(e) });
     }
+    return null;
+  });
+
+/**
+ * When admin marks a `Panic Alert` resolved, notify every family member in Notifications.
+ */
+exports.sendNotificationsOnPanicAlertResolved = functions.firestore
+  .document("Panic Alert/{docId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+
+    if (isResolvedPanicDoc(before) || !isResolvedPanicDoc(after)) {
+      return null;
+    }
+    if (after.resolutionNotifiedAt != null) {
+      return null;
+    }
+
+    const familyName = String(
+      after.familyName || after["Family Name"] || before.familyName || ""
+    ).trim();
+    if (!familyName) {
+      functions.logger.warn("Panic resolved: missing familyName", {
+        docId: context.params.docId,
+      });
+      return null;
+    }
+
+    const triggererName = String(
+      after.alertTriggeredBy ||
+        after["Parents Name"] ||
+        before.alertTriggeredBy ||
+        "Family Member"
+    ).trim();
+    const triggererId = String(
+      after.alertTriggeredById || after["uid of the Parent"] || ""
+    ).trim();
+
+    const uids = await listFamilyRegisterdUids(familyName);
+    if (!uids.length) {
+      functions.logger.warn("Panic resolved: no family uids", { familyName });
+      return null;
+    }
+
+    const db = admin.firestore();
+    const notificationsCol = db.collection("Notifications");
+    const notified = new Set();
+    const writes = [];
+
+    for (const uid of uids) {
+      const rid = String(uid || "").trim();
+      if (!rid || notified.has(rid)) {
+        continue;
+      }
+      notified.add(rid);
+      const isSelf = triggererId && rid === triggererId;
+      writes.push(
+        notificationsCol.add({
+          type: "panic_alert_resolved",
+          title: "Emergency resolved",
+          message: isSelf
+            ? "Your panic alert has been marked resolved. The emergency is over."
+            : `The panic alert for ${familyName} has been resolved. The emergency is over.`,
+          recipientId: rid,
+          senderId: triggererId || "system",
+          senderName: triggererName,
+          familyName,
+          panicAlertId: context.params.docId,
+          isRead: false,
+          triggeredBySelf: isSelf,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+      );
+    }
+
+    await Promise.all(writes);
+    await change.after.ref.set(
+      { resolutionNotifiedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    functions.logger.info("Panic resolved notifications created", {
+      docId: context.params.docId,
+      familyName,
+      count: notified.size,
+    });
     return null;
   });
 

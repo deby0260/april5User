@@ -287,6 +287,16 @@ export class NotificationService implements PickupReminderSync {
     const type = String(notification.data?.type || '');
     if (type === 'panic' || type === 'panic_alert') {
       this.handlePanicNotification(notification);
+      return;
+    }
+    if (type === 'panic_alert_resolved') {
+      this.showLocalNotification({
+        title: 'Emergency resolved',
+        body: notification.body || 'The panic alert has been resolved.',
+        type: 'general',
+        timestamp: new Date(),
+        read: false,
+      });
     }
   }
 

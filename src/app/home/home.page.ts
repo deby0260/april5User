@@ -53,6 +53,7 @@ export class HomePage implements OnInit {
   upcomingPickups: any[] = [];
   userHasFamily: boolean = false;
   userRole: UserRole | null = null;
+  roleLoading = true;
   showingOfflinePickups = false;
 
   private readonly WEATHER_API_KEY = '6549deb0d8bf8eb1d35194b5b7e02e43';
@@ -78,7 +79,9 @@ export class HomePage implements OnInit {
     // Check if user has a family and get role
     if (this.currentUser) {
       this.userHasFamily = await this.familyService.checkUserHasFamily();
-      this.userRole = await this.roleAccessService.getUserRole();
+      await this.refreshUserRole();
+    } else {
+      this.roleLoading = false;
     }
 
     this.loadWeatherData();
@@ -86,8 +89,28 @@ export class HomePage implements OnInit {
 
   /** Reload pickups whenever Home is shown (tabs keep the page alive; avoids stale cards after edits). */
   async ionViewWillEnter() {
+    if (this.currentUser) {
+      this.userHasFamily = await this.familyService.checkUserHasFamily();
+      await this.refreshUserRole();
+    }
     await this.loadUpcomingPickups();
     void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: false });
+  }
+
+  private async refreshUserRole(): Promise<void> {
+    this.roleLoading = true;
+    try {
+      this.userRole = await this.roleAccessService.getUserRole();
+    } finally {
+      this.roleLoading = false;
+    }
+  }
+
+  isParentOnlyFeatureAllowed(flag: keyof Pick<UserRole, 'canAccessAnalytics' | 'canAccessConsentLetter' | 'canAccessScheduling'>): boolean {
+    if (this.roleLoading || !this.userRole) {
+      return false;
+    }
+    return !!this.userRole[flag];
   }
 
   private toLocalYmd(dateStr: string): string {
@@ -488,21 +511,27 @@ export class HomePage implements OnInit {
 
   // Navigation methods with family check
   async navigateToAnalytics() {
-    if (await this.checkRoleAccess('analytics')) {
-      this.router.navigate(['/analytics']);
+    if (!this.isParentOnlyFeatureAllowed('canAccessAnalytics')) {
+      await this.checkRoleAccess('analytics');
+      return;
     }
+    this.router.navigate(['/analytics']);
   }
 
   async navigateToDigitalConsent() {
-    if (await this.checkRoleAccess('consent-letter')) {
-      this.router.navigate(['/consent-letter']);
+    if (!this.isParentOnlyFeatureAllowed('canAccessConsentLetter')) {
+      await this.checkRoleAccess('consent-letter');
+      return;
     }
+    this.router.navigate(['/consent-letter']);
   }
 
   async navigateToSetSchedule() {
-    if (await this.checkRoleAccess('scheduling')) {
-      this.router.navigate(['/scheduling']);
+    if (!this.isParentOnlyFeatureAllowed('canAccessScheduling')) {
+      await this.checkRoleAccess('scheduling');
+      return;
     }
+    this.router.navigate(['/scheduling']);
   }
 
   async navigateToDisplayQR() {
@@ -549,7 +578,11 @@ export class HomePage implements OnInit {
 
     const hasAccess = await this.roleAccessService.canUserAccess(feature);
     if (!hasAccess) {
-      await this.showAccessDeniedAlert('', false);
+      const role = await this.roleAccessService.getUserRoleString();
+      await this.showAccessDeniedAlert(
+        this.roleAccessService.getAccessDeniedMessage(feature, role),
+        false
+      );
       return false;
     }
 

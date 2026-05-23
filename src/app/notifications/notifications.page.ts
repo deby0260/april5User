@@ -23,6 +23,7 @@ interface Notification {
     | 'schedule_assignment'
     | 'pickup_completion'
     | 'panic_alert'
+    | 'panic_alert_resolved'
     | 'password_change_required'
     | 'admin_announcement';
   title: string;
@@ -578,6 +579,8 @@ export class NotificationsPage implements OnInit, OnDestroy {
         return 'checkmark-circle-outline';
       case 'panic_alert':
         return 'warning-outline';
+      case 'panic_alert_resolved':
+        return 'checkmark-circle-outline';
       case 'request':
       case 'join_request':
         return 'person-add-outline';
