@@ -43,6 +43,8 @@ export class CreatedFamilyPage implements OnInit {
   currentUserRole: string = '';
   canManageFamily: boolean = false;
   showingOfflineFamily = false;
+  memberPhotoBroken: Record<string, boolean> = {};
+  childPhotoBroken: Record<string, boolean> = {};
 
   constructor(
     private router: Router,
@@ -70,6 +72,25 @@ export class CreatedFamilyPage implements OnInit {
     }
 
     await this.loadFamilyData();
+  }
+
+  async ionViewWillEnter() {
+    this.memberPhotoBroken = {};
+    this.childPhotoBroken = {};
+    await this.loadFamilyData();
+  }
+
+  onMemberPhotoError(member: FamilyMember): void {
+    const key = member.uid || member.email || member.name;
+    if (key) {
+      this.memberPhotoBroken[key] = true;
+    }
+  }
+
+  onChildPhotoError(childName: string): void {
+    if (childName) {
+      this.childPhotoBroken[childName] = true;
+    }
   }
 
   private pick<T = any>(obj: any, ...keys: string[]): T | undefined {

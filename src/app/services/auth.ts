@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Firestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from '@angular/fire/firestore';
 import { Auth as FirebaseAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from '@angular/fire/auth';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { OfflineCacheService } from './offline-cache.service';
 
 export interface UserData {
   uid: string;
@@ -29,7 +30,8 @@ export class AuthService {
 
   constructor(
     private firestore: Firestore,
-    private auth: FirebaseAuth
+    private auth: FirebaseAuth,
+    private offlineCache: OfflineCacheService
   ) {
     this.loadCurrentUser();
   }
@@ -145,6 +147,7 @@ export class AuthService {
         localStorage.setItem('currentUser', JSON.stringify(userData));
         this.currentUserSubject.next(userData);
         void this.syncDeviceTimeZoneToProfile(uid);
+        void this.offlineCache.cacheUserProfilePicture(uid, userData.profilePicture);
 
         // Check if this is a verified parent who needs to change password
         await this.checkAndNotifyVerifiedParent(userData);
@@ -152,7 +155,7 @@ export class AuthService {
         return {
           success: true,
           message: 'Login successful',
-          user: userData
+          user: this.offlineCache.resolveUserProfileForDisplay(userData) || userData
         };
       } catch (firebaseError: any) {
         // If Firebase Auth fails, try Firestore-only login as fallback
@@ -182,7 +185,8 @@ export class AuthService {
   }
 
   getCurrentUser(): UserData | null {
-    return this.currentUserSubject.value;
+    const user = this.currentUserSubject.value;
+    return this.offlineCache.resolveUserProfileForDisplay(user);
   }
 
   /** Updates in-memory session + localStorage (e.g. after password change). */
@@ -193,7 +197,11 @@ export class AuthService {
     }
     const merged: UserData = { ...user, ...patch, uid: user.uid };
     localStorage.setItem('currentUser', JSON.stringify(merged));
-    this.currentUserSubject.next(merged);
+    const display = this.offlineCache.resolveUserProfileForDisplay(merged) || merged;
+    this.currentUserSubject.next(display);
+    if (patch.profilePicture) {
+      void this.offlineCache.cacheUserProfilePicture(user.uid, patch.profilePicture);
+    }
   }
 
   /** Merges latest Registerd fields into the active session (e.g. after settings edit). */
@@ -209,8 +217,10 @@ export class AuthService {
       }
       const merged: UserData = { ...user, ...(snap.data() as UserData), uid: user.uid };
       localStorage.setItem('currentUser', JSON.stringify(merged));
-      this.currentUserSubject.next(merged);
-      return merged;
+      await this.offlineCache.cacheUserProfilePicture(merged.uid, merged.profilePicture);
+      const display = this.offlineCache.resolveUserProfileForDisplay(merged) || merged;
+      this.currentUserSubject.next(display);
+      return display;
     } catch {
       return user;
     }
@@ -241,6 +251,13 @@ export class AuthService {
       return { success: false, message: 'Contact number must be exactly 11 digits.' };
     }
 
+    if (!this.offlineCache.isOnline()) {
+      return {
+        success: false,
+        message: 'You are offline. Connect to the internet to save profile changes.',
+      };
+    }
+
     try {
       const patch: Record<string, string> = { fullName, contactNumber };
       if (updates.profilePicture !== undefined) {
@@ -259,6 +276,9 @@ export class AuthService {
       };
       localStorage.setItem('currentUser', JSON.stringify(merged));
       this.currentUserSubject.next(merged);
+      if (updates.profilePicture !== undefined) {
+        await this.offlineCache.cacheUserProfilePicture(user.uid, updates.profilePicture);
+      }
       return { success: true, message: 'Profile updated successfully.' };
     } catch {
       return { success: false, message: 'Failed to update profile. Please try again.' };
@@ -295,7 +315,9 @@ export class AuthService {
     if (savedUser) {
       try {
         const userData = JSON.parse(savedUser) as UserData;
-        this.currentUserSubject.next(userData);
+        const display = this.offlineCache.resolveUserProfileForDisplay(userData) || userData;
+        this.currentUserSubject.next(display);
+        void this.offlineCache.cacheUserProfilePicture(userData.uid, userData.profilePicture);
       } catch (error) {
         localStorage.removeItem('currentUser');
       }

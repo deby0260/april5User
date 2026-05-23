@@ -1,4 +1,6 @@
-<div class="offline-banner" *ngIf="offlineCache.bannerActive$ | async">
-  <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
-  <span>Offline — showing saved data from your last visit</span>
-</div>
+<ng-container *ngIf="bannerState$ | async as state">
+  <div class="offline-banner" *ngIf="state.visible">
+    <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
+    <span class="offline-banner__title">Offline mode</span>
+  </div>
+</ng-container>

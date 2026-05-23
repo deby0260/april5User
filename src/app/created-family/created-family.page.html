@@ -5,7 +5,7 @@
       <p>Loading family data...</p>
     </div>
 
-    <p class="offline-page-hint" *ngIf="showingOfflineFamily && !isLoading">Saved from your last online visit</p>
+    <p class="offline-page-hint" *ngIf="showingOfflineFamily && !isLoading">Offline mode</p>
     <div *ngIf="!isLoading" class="family-info-section">
       <h1 class="family-name">{{ familyData.familyName }}</h1>
       <p class="created-date" *ngIf="familyData.createdDate">Created on {{ familyData.createdDate }}</p>
@@ -18,10 +18,11 @@
         <div *ngFor="let member of familyData.members" class="member-item">
           <div class="member-avatar">
             <img
-              *ngIf="member.profilePicture"
+              *ngIf="member.profilePicture && !memberPhotoBroken[member.uid || member.email || member.name]"
               [src]="member.profilePicture"
               [alt]="member.name"
-              class="member-photo">
+              class="member-photo"
+              (error)="onMemberPhotoError(member)">
             <ion-icon
               *ngIf="!member.profilePicture"
               name="person-circle"
@@ -63,10 +64,11 @@
           <div *ngFor="let child of familyData.children" class="member-item child-item">
             <div class="member-avatar">
               <img
-                *ngIf="child.profilePicture"
+                *ngIf="child.profilePicture && !childPhotoBroken[child.name]"
                 [src]="child.profilePicture"
                 [alt]="child.name"
-                class="child-photo">
+                class="child-photo"
+                (error)="onChildPhotoError(child.name)">
               <ion-icon
                 *ngIf="!child.profilePicture"
                 name="person-circle"

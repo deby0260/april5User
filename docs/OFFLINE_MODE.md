@@ -25,8 +25,19 @@ Firestore also uses persistent local cache (`app.module.ts`) so recently visited
 
 **Settings → Clear cache** runs `localStorage.clear()`, which removes all offline snapshots. Open screens again while online to rebuild them.
 
+## Profile photos
+
+Member and child photos are saved as **data URLs** in the family cache when you open **Family** while online (same idea as the QR code image). Your own photo is cached when you open **Settings** or log in online.
+
+**Uploading** a new profile photo still requires internet.
+
+## Offline mode indicator
+
+A yellow banner at the top shows **Offline mode** when the device has no connection or when a screen is showing saved data.
+
 ## Limitations
 
 - Approve/deny join requests, edit schedules, panic, and new pickups require network.
 - Cached lists do not update until you are online again.
 - Push notifications and SMS still require server connectivity.
+- Open **Family** and **Settings** once online after an app update so photos are embedded in the cache.
