@@ -6,6 +6,7 @@ import { LoadingController, AlertController, ToastController } from '@ionic/angu
 import { NotificationFeedsBackgroundService } from '../services/notification-feeds-background.service';
 import { NotificationService } from '../services/notification.service';
 import { NotificationPreferencesService } from '../services/notification-preferences.service';
+import { RoleAccessService } from '../services/role-access.service';
 
 @Component({
   selector: 'app-login',
@@ -30,10 +31,15 @@ export class LoginPage implements OnInit {
     private toastController: ToastController,
     private notificationFeedsBackground: NotificationFeedsBackgroundService,
     private notificationService: NotificationService,
-    private notificationPreferences: NotificationPreferencesService
+    private notificationPreferences: NotificationPreferencesService,
+    private roleAccessService: RoleAccessService
   ) { }
 
   ngOnInit() {
+    this.authService.ensureSessionRestored();
+    if (this.authService.isLoggedIn()) {
+      void this.router.navigateByUrl('/home', { replaceUrl: true });
+    }
   }
 
   togglePasswordVisibility(ev?: Event): void {
@@ -68,6 +74,7 @@ export class LoginPage implements OnInit {
           this.notificationPreferences.isAppNotificationsEnabled()
         );
         await this.notificationService.syncPushTokenAfterLogin();
+        void this.roleAccessService.warmUserRoleCache();
 
         this.router.navigate(['/home']);
       } else {

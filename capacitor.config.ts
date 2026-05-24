@@ -5,6 +5,12 @@ const config: CapacitorConfig = {
   appName: 'fetchSafe',
   webDir: 'www',
   plugins: {
+    SplashScreen: {
+      launchAutoHide: false,
+      backgroundColor: '#ffffff',
+      androidSplashResourceName: 'splash',
+      showSpinner: false,
+    },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"]
     },

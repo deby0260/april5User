@@ -113,16 +113,32 @@ export class AnalyticsPage implements OnInit {
 
   private async refreshAccess(): Promise<void> {
     try {
+      const cached = this.roleAccess.getCachedUserRole();
+      if (cached) {
+        this.applyAccessFromRole(cached);
+      }
       const role = await this.roleAccess.getUserRole();
-      this.canViewSafetySections = Boolean(role?.canAccessAnalytics);
-      this.accessDeniedMessage = this.canViewSafetySections
-        ? null
-        : this.roleAccess.getAccessDeniedMessage('analytics', role?.role);
+      if (role) {
+        this.applyAccessFromRole(role);
+      } else if (!cached) {
+        this.canViewSafetySections = false;
+        this.accessDeniedMessage =
+          'Only family owners and parents can access analytics.';
+      }
     } catch {
-      this.canViewSafetySections = false;
-      this.accessDeniedMessage =
-        'Only family owners and parents can access analytics.';
+      if (!this.roleAccess.getCachedUserRole()) {
+        this.canViewSafetySections = false;
+        this.accessDeniedMessage =
+          'Only family owners and parents can access analytics.';
+      }
     }
+  }
+
+  private applyAccessFromRole(role: { canAccessAnalytics: boolean; role: string }): void {
+    this.canViewSafetySections = Boolean(role.canAccessAnalytics);
+    this.accessDeniedMessage = this.canViewSafetySections
+      ? null
+      : this.roleAccess.getAccessDeniedMessage('analytics', role.role);
   }
 
   get scopeSelectModel(): string {

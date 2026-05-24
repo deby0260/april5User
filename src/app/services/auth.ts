@@ -1,6 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Firestore, collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from '@angular/fire/firestore';
-import { Auth as FirebaseAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from '@angular/fire/auth';
+import {
+  Auth as FirebaseAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  User,
+  onAuthStateChanged,
+} from '@angular/fire/auth';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { OfflineCacheService } from './offline-cache.service';
 
@@ -34,6 +41,50 @@ export class AuthService {
     private offlineCache: OfflineCacheService
   ) {
     this.loadCurrentUser();
+    this.watchFirebaseAuthPersistence();
+  }
+
+  /** Re-read saved session (e.g. cold start after force-close). */
+  ensureSessionRestored(): void {
+    if (this.currentUserSubject.value) {
+      return;
+    }
+    this.loadCurrentUser();
+  }
+
+  /**
+   * Firebase Auth may restore after localStorage; Firestore-only logins keep localStorage only.
+   * Never clear a saved session just because Firebase has no user.
+   */
+  private watchFirebaseAuthPersistence(): void {
+    onAuthStateChanged(this.auth, (firebaseUser) => {
+      if (firebaseUser) {
+        void this.syncSessionFromFirebaseUser(firebaseUser);
+      }
+    });
+  }
+
+  private async syncSessionFromFirebaseUser(firebaseUser: User): Promise<void> {
+    if (this.currentUserSubject.value?.uid === firebaseUser.uid) {
+      return;
+    }
+    try {
+      const userDocRef = doc(this.firestore, 'Registerd', firebaseUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (!userDocSnap.exists()) {
+        return;
+      }
+      const userData: UserData = {
+        ...(userDocSnap.data() as UserData),
+        uid: firebaseUser.uid,
+      };
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      const display = this.offlineCache.resolveUserProfileForDisplay(userData) || userData;
+      this.currentUserSubject.next(display);
+      void this.offlineCache.cacheUserProfilePicture(userData.uid, userData.profilePicture);
+    } catch {
+      /* keep existing local session */
+    }
   }
 
   private getFriendlyAuthErrorMessage(error: any, fallback: string): string {
@@ -177,8 +228,12 @@ export class AuthService {
 
   async logout(): Promise<void> {
     try {
+      const uid = this.currentUserSubject.value?.uid;
       await signOut(this.auth);
       localStorage.removeItem('currentUser');
+      if (uid) {
+        localStorage.removeItem(`userRole:${uid}`);
+      }
       this.currentUserSubject.next(null);
     } catch (error) {
     }

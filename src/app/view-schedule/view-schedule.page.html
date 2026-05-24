@@ -10,7 +10,7 @@
       <h2 class="section-title">{{ familyName }} Schedule</h2>
 
       
-      <div *ngIf="isLoading" class="loading-container">
+      <div *ngIf="isLoading && schedules.length === 0" class="loading-container">
         <ion-spinner name="crescent"></ion-spinner>
         <p>Loading schedules...</p>
       </div>
@@ -26,7 +26,7 @@
       </div>
 
       
-      <div *ngIf="!isLoading && schedules.length > 0" class="schedule-container">
+      <div *ngIf="schedules.length > 0" class="schedule-container">
         <div class="schedule-list">
           <div class="schedule-item" *ngFor="let schedule of schedules">
             <div class="schedule-card" [class.completed]="isScheduleCompleted(schedule)" [class.editing]="isEditing(schedule)">

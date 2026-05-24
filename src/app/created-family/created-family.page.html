@@ -1,17 +1,17 @@
 <ion-content [fullscreen]="true" class="created-family-page" [scrollY]="true">
   <div class="page-container">
-    <div *ngIf="isLoading" class="loading-section">
+    <div *ngIf="isLoading && !familyData.familyName" class="loading-section">
       <ion-spinner name="crescent"></ion-spinner>
       <p>Loading family data...</p>
     </div>
 
     <p class="offline-page-hint" *ngIf="showingOfflineFamily && !isLoading">Offline mode</p>
-    <div *ngIf="!isLoading" class="family-info-section">
+    <div *ngIf="!isLoading || familyData.familyName" class="family-info-section">
       <h1 class="family-name">{{ familyData.familyName }}</h1>
       <p class="created-date" *ngIf="familyData.createdDate">Created on {{ familyData.createdDate }}</p>
     </div>
 
-    <div *ngIf="!isLoading" class="family-members-section">
+    <div *ngIf="!isLoading || familyData.familyName" class="family-members-section">
       <h3 class="section-title">Family Members</h3>
 
       <div class="members-list">

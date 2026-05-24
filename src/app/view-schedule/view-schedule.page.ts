@@ -71,13 +71,42 @@ export class ViewSchedulePage implements OnInit {
   ) { }
 
   async ngOnInit() {
-    this.userRole = await this.roleAccessService.getUserRole();
+    this.hydrateRoleFromCache();
+    this.hydrateSchedulesFromCache();
     this.startAutomaticScheduleCompletion();
   }
 
   /** Reload from Firestore whenever the page is shown (tab/back from scheduling), not only on first create. */
   async ionViewWillEnter() {
-    await this.loadScheduleData();
+    this.hydrateRoleFromCache();
+    const hadCachedSchedules = this.hydrateSchedulesFromCache();
+    await this.loadScheduleData(!hadCachedSchedules);
+  }
+
+  private hydrateRoleFromCache(): void {
+    this.roleAccessService.applyUserRole((role) => {
+      this.userRole = role;
+    });
+  }
+
+  private hydrateSchedulesFromCache(): boolean {
+    const familyName =
+      this.familyName ||
+      this.userRole?.familyName ||
+      this.roleAccessService.getCachedUserRole()?.familyName ||
+      '';
+    if (!familyName) {
+      return false;
+    }
+    const cached = this.offlineCache.load<ScheduleItem[]>(OfflineCacheKeys.schedules(familyName));
+    if (!cached?.length) {
+      return false;
+    }
+    this.familyName = familyName;
+    this.schedules = cached;
+    this.isLoading = false;
+    this.showingOfflineSchedules = !this.offlineCache.isOnline();
+    return true;
   }
 
   startAutomaticScheduleCompletion() {
@@ -100,7 +129,7 @@ export class ViewSchedulePage implements OnInit {
 
   async checkAndCompleteOverdueSchedules() {
     try {
-      await this.loadScheduleData({ silent: true });
+      await this.loadScheduleData(false);
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes(); 
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
@@ -306,9 +335,9 @@ export class ViewSchedulePage implements OnInit {
     }
   }
 
-  async loadScheduleData(opts?: { silent?: boolean }) {
-    const silent = opts?.silent === true;
-    if (!silent) {
+  async loadScheduleData(showLoadingIfEmpty = true) {
+    const hasContent = this.schedules.length > 0;
+    if (showLoadingIfEmpty && !hasContent) {
       this.isLoading = true;
     }
     try {
@@ -339,15 +368,13 @@ export class ViewSchedulePage implements OnInit {
       if (!result.fromCache) {
         await this.loadFamilyPickersForEdit();
         await this.notificationService.syncPendingPickupReminders30mForCurrentUser({
-          force: !silent,
+          force: hasContent,
         });
       }
 
     } catch (error) {
     } finally {
-      if (!silent) {
-        this.isLoading = false;
-      }
+      this.isLoading = false;
     }
   }
 

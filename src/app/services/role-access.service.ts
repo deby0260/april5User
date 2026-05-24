@@ -21,14 +21,101 @@ export interface UserRole {
   providedIn: 'root'
 })
 export class RoleAccessService {
+  private memoryCache = new Map<string, UserRole>();
+  private roleFetchPromise: Promise<UserRole | null> | null = null;
 
   constructor(
     private authService: AuthService,
     private familyService: FamilyService
   ) { }
 
+  private roleCacheKey(uid: string): string {
+    return `userRole:${uid}`;
+  }
+
+  /** Synchronous read of the last known role for the active user (avoids home UI flicker). */
+  getCachedUserRole(): UserRole | null {
+    const uid = this.authService.getCurrentUser()?.uid;
+    if (!uid) {
+      return null;
+    }
+
+    const mem = this.memoryCache.get(uid);
+    if (mem) {
+      return mem;
+    }
+
+    try {
+      const raw = localStorage.getItem(this.roleCacheKey(uid));
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw) as UserRole;
+      if (parsed?.role) {
+        this.memoryCache.set(uid, parsed);
+        return parsed;
+      }
+    } catch {
+      /* noop */
+    }
+
+    return null;
+  }
+
+  private saveUserRoleCache(uid: string, role: UserRole): void {
+    this.memoryCache.set(uid, role);
+    try {
+      localStorage.setItem(this.roleCacheKey(uid), JSON.stringify(role));
+    } catch {
+      /* noop */
+    }
+  }
+
+  clearUserRoleCache(uid?: string): void {
+    const id = uid || this.authService.getCurrentUser()?.uid;
+    if (!id) {
+      return;
+    }
+    this.memoryCache.delete(id);
+    localStorage.removeItem(this.roleCacheKey(id));
+  }
+
+  /**
+   * Applies cached role immediately, then refreshes from Firestore in the background.
+   */
+  applyUserRole(onApply: (role: UserRole) => void): void {
+    const cached = this.getCachedUserRole();
+    if (cached) {
+      onApply(cached);
+    }
+    void this.getUserRole().then((role) => {
+      if (role) {
+        onApply(role);
+      }
+    });
+  }
+
+  /** Preload role after login / app resume (no-op when cache is warm). */
+  warmUserRoleCache(): Promise<UserRole | null> {
+    if (this.getCachedUserRole()) {
+      void this.getUserRole();
+      return Promise.resolve(this.getCachedUserRole());
+    }
+    return this.getUserRole();
+  }
 
   async getUserRole(): Promise<UserRole | null> {
+    if (this.roleFetchPromise) {
+      return this.roleFetchPromise;
+    }
+
+    this.roleFetchPromise = this.fetchUserRoleFromNetwork().finally(() => {
+      this.roleFetchPromise = null;
+    });
+    return this.roleFetchPromise;
+  }
+
+  private async fetchUserRoleFromNetwork(): Promise<UserRole | null> {
     try {
       const currentUser = this.authService.getCurrentUser();
       if (!currentUser) {
@@ -37,9 +124,9 @@ export class RoleAccessService {
 
       const family = await this.familyService.getUserFamily();
       if (!family) {
+        this.clearUserRoleCache(currentUser.uid);
         return null;
       }
-
 
       const isOriginalCreator = await this.familyService.isOriginalCreator(currentUser.uid, family.name);
 
@@ -60,7 +147,7 @@ export class RoleAccessService {
         }
       }
 
-      return {
+      const resolved: UserRole = {
         role: userRole,
         familyName: family.name,
         canAccessAnalytics: this.canAccessAnalytics(userRole),
@@ -72,20 +159,39 @@ export class RoleAccessService {
         canAccessNotifications: this.canAccessNotifications(userRole),
         canManageFamily: this.canManageFamily(userRole),
         canRemoveMembers: this.canRemoveMembers(userRole),
-        canChangeRoles: this.canChangeRoles(userRole)
+        canChangeRoles: this.canChangeRoles(userRole),
       };
-    } catch (error) {
-      return null;
+
+      this.saveUserRoleCache(currentUser.uid, resolved);
+      return resolved;
+    } catch {
+      return this.getCachedUserRole();
     }
   }
 
-  
+  canUserAccessFromCache(feature: string): boolean | null {
+    const userRole = this.getCachedUserRole();
+    if (!userRole) {
+      return null;
+    }
+    return this.resolveFeatureAccess(userRole, feature);
+  }
+
   async canUserAccess(feature: string): Promise<boolean> {
+    const cached = this.canUserAccessFromCache(feature);
+    if (cached !== null) {
+      void this.getUserRole();
+      return cached;
+    }
+
     const userRole = await this.getUserRole();
     if (!userRole) {
       return false;
     }
+    return this.resolveFeatureAccess(userRole, feature);
+  }
 
+  private resolveFeatureAccess(userRole: UserRole, feature: string): boolean {
     switch (feature) {
       case 'analytics':
         return userRole.canAccessAnalytics;
@@ -186,18 +292,31 @@ export class RoleAccessService {
 
   
   async isOwner(): Promise<boolean> {
+    const cached = this.getCachedUserRole();
+    if (cached) {
+      void this.getUserRole();
+      return cached.role === 'owner';
+    }
     const userRole = await this.getUserRole();
     return userRole?.role === 'owner';
   }
 
-  
   async isParentOrOwner(): Promise<boolean> {
+    const cached = this.getCachedUserRole();
+    if (cached) {
+      void this.getUserRole();
+      return ['owner', 'parent'].includes(cached.role);
+    }
     const userRole = await this.getUserRole();
     return ['owner', 'parent'].includes(userRole?.role || '');
   }
 
-  
   async getUserRoleString(): Promise<string> {
+    const cached = this.getCachedUserRole();
+    if (cached) {
+      void this.getUserRole();
+      return cached.role;
+    }
     const userRole = await this.getUserRole();
     return userRole?.role || 'companion';
   }
@@ -211,12 +330,11 @@ export class RoleAccessService {
       }
 
       
-      const userRole = await this.getUserRole();
+      const userRole = this.getCachedUserRole() || (await this.getUserRole());
       if (!userRole || !userRole.canRemoveMembers) {
         return false;
       }
 
-      
       if (memberUID === currentUser.uid) {
         return false;
       }
@@ -242,12 +360,11 @@ export class RoleAccessService {
       }
 
       
-      const userRole = await this.getUserRole();
+      const userRole = this.getCachedUserRole() || (await this.getUserRole());
       if (!userRole || !userRole.canChangeRoles) {
         return false;
       }
 
-      
       if (memberUID === currentUser.uid) {
         return false;
       }

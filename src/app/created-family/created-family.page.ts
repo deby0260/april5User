@@ -59,25 +59,74 @@ export class CreatedFamilyPage implements OnInit {
   ) {}
 
   async ngOnInit() {
-    const hasFamily = await this.familyService.checkUserHasFamily();
-    if (!hasFamily) {
+    const cachedHasFamily = this.familyService.getCachedUserHasFamily();
+    if (cachedHasFamily === false) {
       setTimeout(() => this.router.navigate(['/register-create-family']), 100);
       return;
     }
-
-    const userRole = await this.roleAccessService.getUserRole();
-    if (userRole) {
-      this.currentUserRole = userRole.role;
-      this.canManageFamily = userRole.canManageFamily;
+    if (cachedHasFamily === null) {
+      const hasFamily = await this.familyService.checkUserHasFamily();
+      if (!hasFamily) {
+        setTimeout(() => this.router.navigate(['/register-create-family']), 100);
+      }
     }
-
-    await this.loadFamilyData();
   }
 
   async ionViewWillEnter() {
     this.memberPhotoBroken = {};
     this.childPhotoBroken = {};
-    await this.loadFamilyData();
+    this.hydrateRoleFromCache();
+    const hadCachedFamily = this.hydrateFamilyFromCache();
+    await this.loadFamilyData(!hadCachedFamily);
+  }
+
+  private hydrateRoleFromCache(): void {
+    this.roleAccessService.applyUserRole((role) => {
+      this.currentUserRole = role.role;
+      this.canManageFamily = role.canManageFamily;
+    });
+  }
+
+  /** Show last saved family snapshot immediately (avoids loading flash on tab return). */
+  private hydrateFamilyFromCache(): boolean {
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser?.uid) {
+      return false;
+    }
+
+    if (this.familyData.familyName) {
+      this.isLoading = false;
+      return true;
+    }
+
+    const uidCache = this.offlineCache.load<FamilyData>(
+      OfflineCacheKeys.familyPage(currentUser.uid)
+    );
+    if (uidCache?.familyName) {
+      this.applyCachedFamilyData(uidCache);
+      return true;
+    }
+
+    const familyName = this.roleAccessService.getCachedUserRole()?.familyName;
+    if (familyName) {
+      const namedCache = this.offlineCache.load<FamilyData>(OfflineCacheKeys.family(familyName));
+      if (namedCache?.familyName) {
+        this.applyCachedFamilyData(namedCache);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private applyCachedFamilyData(cached: FamilyData): void {
+    this.familyData = this.offlineCache.applyOfflineProfileImages(cached);
+    this.isLoading = false;
+    this.showingOfflineFamily = !this.offlineCache.isOnline();
+  }
+
+  private persistFamilyPageCache(uid: string, data: FamilyData): void {
+    this.offlineCache.save(OfflineCacheKeys.familyPage(uid), data);
   }
 
   onMemberPhotoError(member: FamilyMember): void {
@@ -138,9 +187,13 @@ export class CreatedFamilyPage implements OnInit {
     return merged as FamilyMember;
   }
 
-  async loadFamilyData() {
+  async loadFamilyData(showLoadingIfEmpty = true) {
     try {
-      this.isLoading = true;
+      const hasContent = !!this.familyData.familyName;
+      if (showLoadingIfEmpty && !hasContent) {
+        this.isLoading = true;
+      }
+
       const currentUser = this.authService.getCurrentUser();
       if (!currentUser) {
         this.showToast('User not authenticated');
@@ -149,7 +202,9 @@ export class CreatedFamilyPage implements OnInit {
 
       const family = await this.familyService.getUserFamily();
       if (!family) {
-        this.showToast('User is not part of any family');
+        if (!hasContent) {
+          this.showToast('User is not part of any family');
+        }
         return;
       }
 
@@ -159,8 +214,11 @@ export class CreatedFamilyPage implements OnInit {
       );
       this.familyData = result.data;
       this.showingOfflineFamily = result.fromCache;
+      this.persistFamilyPageCache(currentUser.uid, result.data);
     } catch (error) {
-      this.showToast('Error loading family data');
+      if (!this.familyData.familyName) {
+        this.showToast('Error loading family data');
+      }
     } finally {
       this.isLoading = false;
     }
@@ -363,6 +421,10 @@ export class CreatedFamilyPage implements OnInit {
       }
 
       member.role = newRole as 'owner' | 'parent' | 'companion';
+      const uid = this.authService.getCurrentUser()?.uid;
+      if (uid) {
+        this.persistFamilyPageCache(uid, this.familyData);
+      }
       await loading.dismiss();
       await this.showToast(`${member.name}'s role updated to ${newRole}`);
     } catch (error) {
@@ -419,6 +481,10 @@ export class CreatedFamilyPage implements OnInit {
       }
 
       this.familyData.members = this.familyData.members.filter(m => m.uid !== member.uid);
+      const uid = this.authService.getCurrentUser()?.uid;
+      if (uid) {
+        this.persistFamilyPageCache(uid, this.familyData);
+      }
       await loading.dismiss();
       await this.showToast(`${member.name} removed from family`);
     } catch (error) {

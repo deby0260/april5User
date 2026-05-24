@@ -73,13 +73,12 @@ export class HomePage implements OnInit {
   ) { }
 
   async ngOnInit() {
-    // Get current user data
     this.currentUser = this.authService.getCurrentUser();
+    this.hydrateRoleAndFamilyFromCache();
 
-    // Check if user has a family and get role
     if (this.currentUser) {
-      this.userHasFamily = await this.familyService.checkUserHasFamily();
-      await this.refreshUserRole();
+      this.refreshUserRole(false);
+      void this.refreshUserHasFamily();
     } else {
       this.roleLoading = false;
     }
@@ -89,25 +88,51 @@ export class HomePage implements OnInit {
 
   /** Reload pickups whenever Home is shown (tabs keep the page alive; avoids stale cards after edits). */
   async ionViewWillEnter() {
+    this.currentUser = this.authService.getCurrentUser();
+    this.hydrateRoleAndFamilyFromCache();
+
     if (this.currentUser) {
-      this.userHasFamily = await this.familyService.checkUserHasFamily();
-      await this.refreshUserRole();
+      this.refreshUserRole(false);
+      void this.refreshUserHasFamily();
     }
     await this.loadUpcomingPickups();
     void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: false });
   }
 
-  private async refreshUserRole(): Promise<void> {
-    this.roleLoading = true;
-    try {
-      this.userRole = await this.roleAccessService.getUserRole();
-    } finally {
+  /** Restore last-known role/family so cards do not flash locked while Firestore loads. */
+  private hydrateRoleAndFamilyFromCache(): void {
+    const cachedRole = this.roleAccessService.getCachedUserRole();
+    if (cachedRole) {
+      this.userRole = cachedRole;
       this.roleLoading = false;
+    }
+
+    const cachedHasFamily = this.familyService.getCachedUserHasFamily();
+    if (cachedHasFamily !== null) {
+      this.userHasFamily = cachedHasFamily;
     }
   }
 
+  private async refreshUserHasFamily(): Promise<void> {
+    this.userHasFamily = await this.familyService.checkUserHasFamily();
+  }
+
+  private refreshUserRole(showLoading = false): void {
+    const hasCachedRole = !!this.userRole || !!this.roleAccessService.getCachedUserRole();
+    if (showLoading && !hasCachedRole) {
+      this.roleLoading = true;
+    }
+    this.roleAccessService.applyUserRole((role) => {
+      this.userRole = role;
+      this.roleLoading = false;
+    });
+  }
+
   isParentOnlyFeatureAllowed(flag: keyof Pick<UserRole, 'canAccessAnalytics' | 'canAccessConsentLetter' | 'canAccessScheduling'>): boolean {
-    if (this.roleLoading || !this.userRole) {
+    if (!this.userRole) {
+      return false;
+    }
+    if (this.roleLoading && !this.roleAccessService.getCachedUserRole()) {
       return false;
     }
     return !!this.userRole[flag];

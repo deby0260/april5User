@@ -1,11 +1,15 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { Platform } from '@ionic/angular';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import { NotificationService } from './services/notification.service';
 import { AuthService, UserData } from './services/auth';
 import { NotificationFeedsBackgroundService } from './services/notification-feeds-background.service';
+import { RoleAccessService } from './services/role-access.service';
 
 @Component({
   selector: 'app-root',
@@ -36,6 +40,7 @@ export class AppComponent implements OnInit, OnDestroy {
     private notificationService: NotificationService,
     private authService: AuthService,
     private notificationFeedsBackground: NotificationFeedsBackgroundService,
+    private roleAccessService: RoleAccessService,
     private router: Router
   ) {
     this.refreshAppChrome(this.router.url);
@@ -51,6 +56,9 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await this.platform.ready();
+    this.authService.ensureSessionRestored();
+    this.redirectToSavedSessionIfNeeded();
+    await this.dismissAppSplash();
     await this.initializeNotifications();
     this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
@@ -58,6 +66,7 @@ export class AppComponent implements OnInit, OnDestroy {
         if (user?.uid) {
           void this.notificationFeedsBackground.ensureRunning();
           void this.notificationService.syncPushTokenAfterLogin();
+          void this.roleAccessService.warmUserRoleCache();
         } else {
           this.notificationFeedsBackground.stop();
         }
@@ -65,12 +74,39 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.authService.getCurrentUser()?.uid) {
       void this.notificationFeedsBackground.ensureRunning();
       void this.notificationService.syncPushTokenAfterLogin();
+      void this.roleAccessService.warmUserRoleCache();
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          this.authService.ensureSessionRestored();
+          this.redirectToSavedSessionIfNeeded();
+        }
+      });
     }
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /** If user force-closed the app, skip welcome/login and open the main app. */
+  private redirectToSavedSessionIfNeeded(): void {
+    if (!this.authService.isLoggedIn()) {
+      return;
+    }
+    const path = (this.router.url.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+    const guestOnly =
+      path === '/' ||
+      path === '/home-screen' ||
+      path === '/login' ||
+      path === '/register' ||
+      path === '/forgot-password';
+    if (guestOnly) {
+      void this.router.navigateByUrl('/home', { replaceUrl: true });
+    }
   }
 
   private refreshAppChrome(url: string): void {
@@ -90,6 +126,15 @@ export class AppComponent implements OnInit, OnDestroy {
 
     this.showAppChrome = !hide;
     this.shellHeaderLayout = !hide && this.shellBackRoutes.has(path) ? 'with-back' : 'main';
+  }
+
+  private async dismissAppSplash(): Promise<void> {
+    try {
+      await SplashScreen.hide();
+    } catch {
+      /* Web / browser — plugin optional */
+    }
+    document.getElementById('bootstrap-splash')?.classList.add('hidden');
   }
 
   private async initializeNotifications() {

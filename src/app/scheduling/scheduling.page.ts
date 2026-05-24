@@ -140,12 +140,10 @@ export class SchedulingPage implements OnInit {
     maxDate.setFullYear(maxDate.getFullYear() + 1);
     this.maxDate = maxDate.toISOString();
 
-    this.scheduleAccessLoading = true;
+    this.hydrateRoleFromCache();
+    const hadCachedRole = !!this.roleAccessService.getCachedUserRole();
+    this.scheduleAccessLoading = !hadCachedRole;
     try {
-      // Resolve family + members + children + role in a single coordinated
-      // pass. Previously `loadFamilyData` and `loadUserRole` each called
-      // `getUserFamily()` (and `loadUserRole` could re-call `getFamilyMembers`)
-      // — duplicating the most expensive lookups on this page.
       await this.loadFamilyAndRole();
     } finally {
       this.scheduleAccessLoading = false;
@@ -186,11 +184,16 @@ export class SchedulingPage implements OnInit {
     this.calendarRemountKey += 1;
   }
 
+  private hydrateRoleFromCache(): void {
+    this.roleAccessService.applyUserRole((role) => {
+      this.currentUserRole = role.role;
+      this.canManageSchedule = role.canAccessScheduling;
+    });
+  }
+
   /**
    * Single coordinated init pass: resolve the user's family once, then fan
-   * out members/children/role in parallel. Replaces the previous design
-   * where `loadFamilyData` and `loadUserRole` each duplicated `getUserFamily`
-   * and could redundantly call `getFamilyMembers` twice on the same load.
+   * out members/children/role in parallel.
    */
   private async loadFamilyAndRole(): Promise<void> {
     try {

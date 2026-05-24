@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 import { authGuard } from './guards/auth-guard';
+import { guestGuard } from './guards/guest.guard';
 import { FamilyGuard } from './guards/family.guard';
 
 const routes: Routes = [
@@ -11,16 +12,18 @@ const routes: Routes = [
   },
   {
     path: 'home-screen',
-    loadChildren: () => import('./home-screen/home-screen.module').then( m => m.HomeScreenPageModule)
+    loadChildren: () => import('./home-screen/home-screen.module').then( m => m.HomeScreenPageModule),
+    canActivate: [guestGuard],
   },
-  
   {
     path: 'login',
-    loadChildren: () => import('./login/login.module').then( m => m.LoginPageModule)
+    loadChildren: () => import('./login/login.module').then( m => m.LoginPageModule),
+    canActivate: [guestGuard],
   },
   {
     path: 'register',
-    loadChildren: () => import('./register/register.module').then( m => m.RegisterPageModule)
+    loadChildren: () => import('./register/register.module').then( m => m.RegisterPageModule),
+    canActivate: [guestGuard],
   },
   {
     path: 'home',
@@ -64,7 +67,8 @@ const routes: Routes = [
   },
   {
     path: 'forgot-password',
-    loadChildren: () => import('./forgot-password/forgot-password.module').then( m => m.ForgotPasswordPageModule)
+    loadChildren: () => import('./forgot-password/forgot-password.module').then( m => m.ForgotPasswordPageModule),
+    canActivate: [guestGuard],
   },
   {
     path: 'reset-password',

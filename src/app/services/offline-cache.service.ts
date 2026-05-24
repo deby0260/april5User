@@ -8,6 +8,7 @@ export const OfflineCacheKeys = {
   homePickups: (familyName: string) => `home-pickups:${familyName}`,
   schedules: (familyName: string) => `schedules:${familyName}`,
   family: (familyName: string) => `family:${familyName}`,
+  familyPage: (uid: string) => `family-page:${uid}`,
   qr: (uid: string) => `qr:${uid}`,
   userProfile: (uid: string) => `user-profile:${uid}`,
 } as const;
