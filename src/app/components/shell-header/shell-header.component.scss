@@ -67,13 +67,39 @@
     line-height: 0;
     color: #129cae;
     transition: color 0.2s ease;
-
-    ion-icon {
-      font-size: 26px;
-    }
+    position: relative;
 
     &:hover {
       color: #0e7ec9;
     }
+  }
+
+  &__bell-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    ion-icon {
+      font-size: 26px;
+    }
+  }
+
+  &__badge {
+    position: absolute;
+    top: -4px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #e53935;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+    pointer-events: none;
   }
 }

@@ -80,6 +80,12 @@ export class NotificationsPage implements OnInit, OnDestroy {
   ) { }
 
   async ngOnInit() {
+    const cachedInbox = this.notificationInboxFeed.inbox$.value;
+    if (cachedInbox.length > 0) {
+      this.notifications = cachedInbox as Notification[];
+      this.isLoading = false;
+    }
+
     this.inboxSub.add(
       this.notificationInboxFeed.inbox$.subscribe((list) => {
         this.notifications = list as Notification[];
@@ -87,6 +93,9 @@ export class NotificationsPage implements OnInit, OnDestroy {
     );
     this.inboxSub.add(
       this.notificationInboxFeed.inboxLoading$.subscribe((loading) => {
+        if (loading && this.notifications.length > 0) {
+          return;
+        }
         this.isLoading = loading;
       })
     );
@@ -99,6 +108,11 @@ export class NotificationsPage implements OnInit, OnDestroy {
   }
 
   async ionViewWillEnter() {
+    const cachedInbox = this.notificationInboxFeed.inbox$.value;
+    if (cachedInbox.length > 0) {
+      this.notifications = cachedInbox as Notification[];
+      this.isLoading = false;
+    }
     await this.notificationFeedsBackground.ensureRunning();
   }
 
@@ -163,20 +177,21 @@ export class NotificationsPage implements OnInit, OnDestroy {
     }
   }
 
-  async onNotificationClick(notification: Notification, event?: Event) {
+  onNotificationClick(notification: Notification, event?: Event) {
     event?.stopPropagation();
+
+    this.detailNotification = notification;
+    this.detailModalOpen = true;
 
     if (
       notification.type !== 'admin_announcement' &&
       !notification.isRead &&
       notification.id
     ) {
-      await this.joinRequestService.markNotificationAsRead(notification.id);
       notification.isRead = true;
+      this.notificationInboxFeed.markAsReadInInbox(notification.id);
+      void this.joinRequestService.markNotificationAsRead(notification.id);
     }
-
-    this.detailNotification = notification;
-    this.detailModalOpen = true;
   }
 
   closeDetailModal(): void {

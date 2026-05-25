@@ -17,8 +17,14 @@
       type="button"
       class="shell-header__bell"
       (click)="navigateToNotifications()"
-      aria-label="Notifications">
-      <ion-icon name="notifications-outline"></ion-icon>
+      [attr.aria-label]="unreadBadgeLabel">
+      <span class="shell-header__bell-wrap">
+        <ion-icon name="notifications-outline"></ion-icon>
+        <span
+          *ngIf="unreadCount > 0"
+          class="shell-header__badge"
+          aria-hidden="true">{{ unreadBadgeText }}</span>
+      </span>
     </button>
   </div>
 </div>

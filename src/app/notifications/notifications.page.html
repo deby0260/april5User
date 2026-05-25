@@ -5,12 +5,12 @@
       <p class="offline-page-hint" *ngIf="showingOfflineInbox">Offline mode</p>
     </div>
 
-    <div *ngIf="isLoading" class="loading-section">
+    <div *ngIf="isLoading && notifications.length === 0" class="loading-section">
       <ion-spinner name="crescent"></ion-spinner>
       <p>Loading notifications...</p>
     </div>
 
-    <div class="notifications-list" *ngIf="!isLoading">
+    <div class="notifications-list" *ngIf="!isLoading || notifications.length > 0">
       <div
         class="notification-item clickable"
         *ngFor="let notification of notifications"

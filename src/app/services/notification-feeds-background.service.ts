@@ -59,7 +59,8 @@ export class NotificationFeedsBackgroundService {
     );
     void this.notificationService.syncPendingPickupReminders30mForCurrentUser({ force: false });
 
-    await this.inboxFeed.refresh();
+    const silentInboxRefresh = this.inboxFeed.inbox$.value.length > 0;
+    await this.inboxFeed.refresh({ silent: silentInboxRefresh });
     await this.forwardInboxEmails(this.inboxFeed.inbox$.value);
 
     try {

@@ -44,6 +44,8 @@ export class NotificationInboxFeedService {
   readonly inbox$ = new BehaviorSubject<InboxFeedItem[]>([]);
   readonly inboxLoading$ = new BehaviorSubject<boolean>(true);
   readonly fromOfflineCache$ = new BehaviorSubject<boolean>(false);
+  /** Unread count for header badge (same rules as notifications page `!isRead`). */
+  readonly unreadCount$ = new BehaviorSubject<number>(0);
 
   private uid: string | null = null;
   private unsubs: Array<() => void> = [];
@@ -71,6 +73,7 @@ export class NotificationInboxFeedService {
       }
     }
     this.unsubs = [];
+    this.publishInbox([]);
   }
 
   /** Start realtime listeners + debounced full reload for the signed-in user. */
@@ -78,10 +81,11 @@ export class NotificationInboxFeedService {
     const id = String(uid || '').trim();
     if (!id) {
       this.stop();
+      this.publishInbox([]);
       return;
     }
     if (this.uid === id && this.unsubs.length > 0) {
-      void this.refresh();
+      void this.refresh({ silent: true });
       return;
     }
     this.stop();
@@ -93,7 +97,10 @@ export class NotificationInboxFeedService {
 
     this.debounceSub = this.refreshTrigger$
       .pipe(debounceTime(200))
-      .subscribe(() => void this.refresh());
+      .subscribe(() => {
+        const silent = this.inbox$.value.length > 0;
+        void this.refresh({ silent });
+      });
 
     this.unsubs.push(
       onSnapshot(annCol, () => this.refreshTrigger$.next(), () => {})
@@ -106,14 +113,18 @@ export class NotificationInboxFeedService {
   }
 
   /** Full reload (also callable after mark-read / approve flows on the page). */
-  async refresh(): Promise<InboxFeedItem[]> {
+  async refresh(options?: { silent?: boolean }): Promise<InboxFeedItem[]> {
     const currentUser = this.authService.getCurrentUser();
     if (!currentUser) {
-      this.inbox$.next([]);
+      this.publishInbox([]);
       this.inboxLoading$.next(false);
       return [];
     }
-    this.inboxLoading$.next(true);
+    const hasContent = this.inbox$.value.length > 0;
+    const silent = options?.silent ?? hasContent;
+    if (!silent) {
+      this.inboxLoading$.next(true);
+    }
     const cacheKey = OfflineCacheKeys.inbox(currentUser.uid);
     try {
       const result = await this.offlineCache.loadWithOfflineFallback(cacheKey, async () => {
@@ -124,22 +135,43 @@ export class NotificationInboxFeedService {
         return [...announcementItems, ...userItems].sort((a, b) => b.sortTime - a.sortTime);
       });
       this.fromOfflineCache$.next(result.fromCache);
-      this.inbox$.next(result.data);
+      this.publishInbox(result.data);
       return result.data;
     } catch {
       const cached = this.offlineCache.load<InboxFeedItem[]>(cacheKey);
       if (cached?.length) {
         this.fromOfflineCache$.next(true);
         this.offlineCache.setBannerActive(true);
-        this.inbox$.next(cached);
+        this.publishInbox(cached);
         return cached;
       }
       this.fromOfflineCache$.next(false);
-      this.inbox$.next([]);
+      this.publishInbox([]);
       return [];
     } finally {
       this.inboxLoading$.next(false);
     }
+  }
+
+  /** Optimistic read state for header badge + inbox list. */
+  markAsReadInInbox(notificationId: string): void {
+    const id = String(notificationId || '').trim();
+    if (!id) {
+      return;
+    }
+    const next = this.inbox$.value.map((item) =>
+      item.id === id ? { ...item, isRead: true } : item
+    );
+    this.publishInbox(next);
+  }
+
+  private publishInbox(items: InboxFeedItem[]): void {
+    this.inbox$.next(items);
+    this.unreadCount$.next(this.countUnread(items));
+  }
+
+  private countUnread(items: InboxFeedItem[]): number {
+    return items.filter((item) => !item.isRead).length;
   }
 
   private getTimestampMs(timestamp: any): number {
