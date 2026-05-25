@@ -15,7 +15,13 @@ type ActiveEmergency = ActiveEmergencyBannerState;
 })
 export class EmergencyBannerComponent implements OnInit, OnDestroy {
   activeEmergency: ActiveEmergency | null = null;
-  private pollHandle: any;
+  /** Shown for 5s to the user who triggered the panic after it is resolved. */
+  resolvedBanner: { headline: string; subline: string } | null = null;
+  private pollHandle: ReturnType<typeof setInterval> | null = null;
+  private resolvedHideTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Tracks latest panic doc across refreshes to detect resolve transitions. */
+  private prevLatestDocId: string | null = null;
+  private prevLatestUnresolved = false;
 
   constructor(
     private firestore: Firestore,
@@ -47,6 +53,33 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
     }
+    if (this.resolvedHideTimer) {
+      clearTimeout(this.resolvedHideTimer);
+    }
+  }
+
+  private showResolvedBannerForTriggerer(): void {
+    if (this.resolvedHideTimer) {
+      clearTimeout(this.resolvedHideTimer);
+    }
+    this.resolvedBanner = {
+      headline: 'EMERGENCY RESOLVED',
+      subline: 'Your panic alert has been resolved. The emergency is over.',
+    };
+    this.resolvedHideTimer = setTimeout(() => {
+      this.resolvedBanner = null;
+      this.resolvedHideTimer = null;
+    }, 5000);
+  }
+
+  private isCurrentUserTriggerer(data: Record<string, unknown> | undefined, uid: string): boolean {
+    if (!uid || !data) {
+      return false;
+    }
+    const triggererUid = String(
+      data['alertTriggeredById'] ?? data['uid of the Parent'] ?? ''
+    ).trim();
+    return triggererUid === uid;
   }
 
   private cacheKey(familyName: string): string {
@@ -148,6 +181,8 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
         this.activeEmergency = null;
         this.panicService.setActiveEmergencyBanner(null);
         this.clearAllEmergencyCaches();
+        this.prevLatestDocId = null;
+        this.prevLatestUnresolved = false;
         return;
       }
 
@@ -174,9 +209,22 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       const latestResolved = latestData ? this.isResolvedPanicDoc(latestData) : true;
 
       if (!latestDoc || latestResolved) {
+        if (
+          latestDoc &&
+          latestResolved &&
+          this.prevLatestDocId === latestDoc.id &&
+          this.prevLatestUnresolved &&
+          this.isCurrentUserTriggerer(latestData, currentUser.uid)
+        ) {
+          this.showResolvedBannerForTriggerer();
+        }
         this.activeEmergency = null;
         this.panicService.setActiveEmergencyBanner(null);
         this.clearAllEmergencyCaches();
+        if (latestDoc) {
+          this.prevLatestDocId = latestDoc.id;
+          this.prevLatestUnresolved = false;
+        }
         return;
       }
 
@@ -195,6 +243,8 @@ export class EmergencyBannerComponent implements OnInit, OnDestroy {
       this.activeEmergency = { triggeredByName, createdAtMs, familyName: family.name };
       this.panicService.setActiveEmergencyBanner(this.activeEmergency);
       this.setCachedEmergency(this.activeEmergency);
+      this.prevLatestDocId = latestDoc.id;
+      this.prevLatestUnresolved = true;
     } catch (e) {
       // Keep showing last-known emergency state until we can confirm resolution.
       // (Do not clear caches on transient query failures.)

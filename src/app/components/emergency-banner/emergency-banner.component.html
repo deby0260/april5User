@@ -12,3 +12,13 @@
   </ion-button>
 </div>
 
+<div class="emergency-banner emergency-banner--resolved" *ngIf="resolvedBanner && !activeEmergency">
+  <div class="left">
+    <ion-icon name="checkmark-circle" class="resolved-icon"></ion-icon>
+    <div class="text">
+      <div class="headline">{{ resolvedBanner.headline }}</div>
+      <div class="subline">{{ resolvedBanner.subline }}</div>
+    </div>
+  </div>
+</div>
+
